@@ -130,13 +130,16 @@ curl http://127.0.0.1:8000/stats/status
 
 ##  Feedback
 Feel free to use this module, don't hesitate to tell me more about what you want to add.
+
 Enjoy.
 
 ##  Authors
 Zhidao Hong(洪志道) `hongzhidao at gmail dot com`  
 
 ## Copyright & License
-I borrowed a lot of code from nginx/unit for basic infrastructure; This part of code is copyrighted by Igor Sysoev. This module is licensed under the BSD license.  
+I borrowed a lot of code from nginx/unit for basic infrastructure. This part of code is copyrighted by Igor Sysoev. 
+
+This module is licensed under the BSD license.  
 ```bash
     Copyright (C) 2019 by Zhidao Hong <hongzhidao@gmail.com>.
     

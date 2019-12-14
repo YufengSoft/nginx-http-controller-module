@@ -189,6 +189,7 @@ ngx_http_ctrl_stats_stub(ngx_http_request_t *r, nxt_mp_t *mp)
 static nxt_conf_value_t *
 ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
 {
+    ngx_slab_pool_t               *shpool;
     nxt_conf_value_t              *value;
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
@@ -198,6 +199,7 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
 
     shctx = clcf->shm_zone->data;
     stats = shctx->stats;
+    shpool = (ngx_slab_pool_t *) clcf->shm_zone->shm.addr;
 
     value = nxt_conf_create_object(mp, 6);
     if (nxt_slow_path(value == NULL)) {
@@ -211,12 +213,16 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     static nxt_str_t  xx5_str = nxt_string("n5xx");
     static nxt_str_t  total_str = nxt_string("total");
 
+    ngx_shmtx_lock(&shpool->mutex);
+
     nxt_conf_set_member_integer(value, &xx1_str, stats->n1xx, 0);
     nxt_conf_set_member_integer(value, &xx2_str, stats->n2xx, 1);
     nxt_conf_set_member_integer(value, &xx3_str, stats->n3xx, 2);
     nxt_conf_set_member_integer(value, &xx4_str, stats->n4xx, 3);
     nxt_conf_set_member_integer(value, &xx5_str, stats->n5xx, 4);
     nxt_conf_set_member_integer(value, &total_str, stats->total, 5);
+
+    ngx_shmtx_unlock(&shpool->mutex);
 
     return value;
 }
