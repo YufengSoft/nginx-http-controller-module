@@ -1,0 +1,45 @@
+ngx_addon_name=$ngx_module_name
+ngx_module_type=HTTP_AUX_FILTER
+ngx_module_name=ngx_http_ctrl_module
+
+ngx_module_incs="$ngx_addon_dir/src"
+
+ngx_module_deps="$ngx_addon_dir/src/nxt_clang.h \
+                 $ngx_addon_dir/src/nxt_types.h \
+                 $ngx_addon_dir/src/nxt_malloc.h \
+                 $ngx_addon_dir/src/nxt_mp.h \
+                 $ngx_addon_dir/src/nxt_string.h \
+                 $ngx_addon_dir/src/nxt_file.h \
+                 $ngx_addon_dir/src/nxt_queue.h \
+                 $ngx_addon_dir/src/nxt_rbtree.h \
+                 $ngx_addon_dir/src/nxt_lvlhsh.h \
+                 $ngx_addon_dir/src/nxt_list.h \
+                 $ngx_addon_dir/src/nxt_array.h \
+                 $ngx_addon_dir/src/nxt_djb_hash.h \
+                 $ngx_addon_dir/src/nxt_utf8.h \
+                 $ngx_addon_dir/src/nxt_unicode_lowcase.h \
+                 $ngx_addon_dir/src/nxt_parse.h \
+                 $ngx_addon_dir/src/nxt_sprintf.h \
+                 $ngx_addon_dir/src/nxt_conf.h \
+                 $ngx_addon_dir/src/nxt_main.h \
+                 $ngx_addon_dir/src/ngx_http_ctrl.h"
+
+ngx_module_srcs="$ngx_addon_dir/src/nxt_malloc.c \
+                 $ngx_addon_dir/src/nxt_mp.c \
+                 $ngx_addon_dir/src/nxt_string.c \
+                 $ngx_addon_dir/src/nxt_file.c \
+                 $ngx_addon_dir/src/nxt_rbtree.c \
+                 $ngx_addon_dir/src/nxt_lvlhsh.c \
+                 $ngx_addon_dir/src/nxt_list.c \
+                 $ngx_addon_dir/src/nxt_array.c \
+                 $ngx_addon_dir/src/nxt_djb_hash.c \
+                 $ngx_addon_dir/src/nxt_utf8.c \
+                 $ngx_addon_dir/src/nxt_parse.c \
+                 $ngx_addon_dir/src/nxt_sprintf.c \
+                 $ngx_addon_dir/src/nxt_conf.c \
+                 $ngx_addon_dir/src/ngx_http_ctrl_stats.c \
+                 $ngx_addon_dir/src/ngx_http_ctrl_module.c"
+
+ngx_module_libs="-lm"
+
+. auto/module
