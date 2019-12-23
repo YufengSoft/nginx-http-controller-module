@@ -20,10 +20,10 @@ Directives
 ==========
 
 
-ctrl_stats_zone
+ctrl_zone
 ---------------
 
-**syntax:**  *ctrl_stats_zone zone=NAME:SIZE*
+**syntax:**  *ctrl_zone zone=NAME:SIZE*
 
 **context:** *http*
 
@@ -54,7 +54,7 @@ nginx.conf
     events {}
 
     http {
-        ctrl_stats_zone  zone=stats:10M;
+        ctrl_zone  zone=stats:10M;
 
         server {
             listen  80;
