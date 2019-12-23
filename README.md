@@ -35,7 +35,7 @@ ctrl_stats
 
 **syntax:**  *ctrl_stats on|off*
 
-**default:**  *ctrl_stats_display off*
+**default:**  *ctrl_stats off*
 
 **context:** *http,server,location*
 
