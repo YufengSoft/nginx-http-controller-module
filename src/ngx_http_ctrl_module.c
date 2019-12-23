@@ -8,33 +8,34 @@
 
 
 static void ngx_http_ctrl_cleanup(void *data);
+
 static ngx_int_t ngx_http_ctrl_init(ngx_conf_t *cf);
+static void *ngx_http_ctrl_create_main_conf(ngx_conf_t *cf);
 static void *ngx_http_ctrl_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_ctrl_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
-static char *ngx_http_ctrl_stats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_ctrl_stats_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_ctrl_stats_display(ngx_conf_t *cf, ngx_command_t *cmd,void *conf);
 
 
 static ngx_command_t  ngx_http_ctrl_commands[] = {
 
-    { ngx_string("ctrl_stats"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
-      ngx_http_ctrl_stats,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      0,
-      NULL },
-
-    { ngx_string("ctrl_stats_zone"),
+    { ngx_string("ctrl_zone"),
       NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
       ngx_http_ctrl_stats_zone,
       0,
       0,
       NULL },
 
+    { ngx_string("ctrl_stats"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_ctrl_loc_conf_t, stats_enable),
+      NULL },
+
     { ngx_string("ctrl_stats_display"),
-      NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS,
       ngx_http_ctrl_stats_display,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
@@ -48,7 +49,7 @@ static ngx_http_module_t  ngx_http_ctrl_module_ctx = {
     NULL,                           /* preconfiguration */
     ngx_http_ctrl_init,             /* postconfiguration */
 
-    NULL,                           /* create main configuration */
+    ngx_http_ctrl_create_main_conf, /* create main configuration */
     NULL,                           /* init main configuration */
 
     NULL,                           /* create server configuration */
@@ -79,40 +80,47 @@ static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 
 
 static ngx_int_t
-ngx_http_ctrl_header_filter(ngx_http_request_t *r)
+ngx_http_ctrl_post_read_handler(ngx_http_request_t *r)
 {
-    ngx_http_ctrl_loc_conf_t      *clcf;
+    ngx_http_ctrl_ctx_t       *ctx;
+    ngx_http_ctrl_loc_conf_t  *clcf;
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
 
-    if (clcf->shm_zone != NULL) {
-        ngx_http_ctrl_stats_code(r, clcf->shm_zone);
+    if (!clcf->stats_enable) {
+        return NGX_DECLINED;
     }
 
-    return ngx_http_next_header_filter(r);
+    ctx = ngx_http_ctrl_get_ctx(r);
+
+    if (ctx == NULL) {
+        return NGX_DECLINED;
+    }
+
+    return NGX_DECLINED;
 }
 
 
-ngx_int_t
-ngx_http_ctrl_init_ctx(ngx_http_request_t *r)
+ngx_http_ctrl_ctx_t *
+ngx_http_ctrl_get_ctx(ngx_http_request_t *r)
 {
     nxt_mp_t                     *mp;
     ngx_pool_cleanup_t           *cln;
     ngx_http_ctrl_ctx_t          *ctx;
 
     if (r != r->main) {
-        return NGX_OK;
+        return NULL;
     }
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
 
     if (ctx != NULL) {
-        return NGX_OK;
+        return ctx;
     }
 
     mp = nxt_mp_create(4096, 128, 1024, 64);
     if (mp == NULL) {
-        return NGX_ERROR;
+        return NULL;
     }
 
     ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_ctrl_ctx_t));
@@ -138,7 +146,7 @@ fail:
 
     nxt_mp_destroy(mp);
 
-    return NGX_ERROR;
+    return NULL;
 }
 
 
@@ -148,6 +156,28 @@ ngx_http_ctrl_cleanup(void *data)
     ngx_http_ctrl_ctx_t *ctx = data;
 
     nxt_mp_destroy(ctx->mem_pool);
+}
+
+
+static ngx_int_t
+ngx_http_ctrl_header_filter(ngx_http_request_t *r)
+{
+    ngx_http_ctrl_ctx_t           *ctx;
+    ngx_http_ctrl_loc_conf_t      *clcf;
+
+    ctx = ngx_http_ctrl_get_ctx(r);
+
+    if (ctx == NULL) {
+        return ngx_http_next_header_filter(r);
+    }
+
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
+
+    if (clcf->stats_enable) {
+        ngx_http_ctrl_stats_code(r);
+    }
+
+    return ngx_http_next_header_filter(r);
 }
 
 
@@ -189,6 +219,26 @@ ngx_http_ctrl_response(ngx_http_request_t *r, nxt_uint_t status,
 
 
 static void *
+ngx_http_ctrl_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_http_ctrl_main_conf_t  *cmcf;
+
+    cmcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_ctrl_main_conf_t));
+    if (cmcf == NULL) {
+        return NULL;
+    }
+
+    /*
+     * set by ngx_pcalloc()
+     *
+     *     cmcf->shm_zone = NULL;
+     */
+
+    return cmcf;
+}
+
+
+static void *
 ngx_http_ctrl_create_loc_conf(ngx_conf_t *cf)
 {
     ngx_http_ctrl_loc_conf_t  *conf;
@@ -198,11 +248,7 @@ ngx_http_ctrl_create_loc_conf(ngx_conf_t *cf)
         return NULL;
     }
 
-    /*
-     * set by ngx_pcalloc():
-     *
-     *     conf->shm_zone = NULL;
-     */
+    conf->stats_enable = NGX_CONF_UNSET;
 
     return conf;
 }
@@ -214,30 +260,15 @@ ngx_http_ctrl_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_ctrl_loc_conf_t *prev = parent;
     ngx_http_ctrl_loc_conf_t *conf = child;
 
-    if (conf->shm_zone == NULL) {
-        conf->shm_zone = prev->shm_zone;
+    ngx_http_ctrl_main_conf_t  *cmcf;
+
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_ctrl_module);
+
+    ngx_conf_merge_value(conf->stats_enable, prev->stats_enable, 0);
+
+    if (conf->stats_enable && cmcf->shm_zone == NULL) {
+        return "require \"ctrl_zone\"";
     }
-
-    return NGX_CONF_OK;
-}
-
-
-static char *
-ngx_http_ctrl_stats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-    ngx_http_ctrl_loc_conf_t  *ctrl_conf = conf;
-
-    ngx_str_t                 *value;
-    ngx_shm_zone_t            *shm_zone;
-
-    value = cf->args->elts;
-
-    shm_zone = ngx_shared_memory_add(cf, &value[1], 0, &ngx_http_ctrl_module);
-    if (shm_zone == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    ctrl_conf->shm_zone = shm_zone;
 
     return NGX_CONF_OK;
 }
@@ -292,6 +323,8 @@ ngx_http_ctrl_init_zone(ngx_shm_zone_t *shm_zone, void *data)
 static char *
 ngx_http_ctrl_stats_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
+    ngx_http_ctrl_main_conf_t  *cmcf = conf;
+
     u_char                   *p;
     ssize_t                   size;
     ngx_str_t                *value, name, s;
@@ -371,6 +404,8 @@ ngx_http_ctrl_stats_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     shm_zone->init = ngx_http_ctrl_init_zone;
     shm_zone->data = ctx;
 
+    cmcf->shm_zone = shm_zone;
+
     return NGX_CONF_OK;
 }
 
@@ -378,22 +413,9 @@ ngx_http_ctrl_stats_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static char *
 ngx_http_ctrl_stats_display(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_ctrl_loc_conf_t  *ctrl_conf = conf;
-
-    ngx_str_t                 *value;
-    ngx_shm_zone_t            *shm_zone;
     ngx_http_core_loc_conf_t  *clcf;
 
     clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-
-    value = cf->args->elts;
-
-    shm_zone = ngx_shared_memory_add(cf, &value[1], 0, &ngx_http_ctrl_module);
-    if (shm_zone == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    ctrl_conf->shm_zone = shm_zone;
 
     clcf->handler = ngx_http_ctrl_stats_handler;
 
@@ -404,6 +426,18 @@ ngx_http_ctrl_stats_display(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static ngx_int_t
 ngx_http_ctrl_init(ngx_conf_t *cf)
 {
+    ngx_http_handler_pt        *h;
+    ngx_http_core_main_conf_t  *cmcf;
+
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
+
+    h = ngx_array_push(&cmcf->phases[NGX_HTTP_POST_READ_PHASE].handlers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_ctrl_post_read_handler;    
+
     ngx_http_next_header_filter = ngx_http_top_header_filter;
     ngx_http_top_header_filter = ngx_http_ctrl_header_filter;
 

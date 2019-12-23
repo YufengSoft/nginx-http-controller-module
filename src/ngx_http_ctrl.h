@@ -16,6 +16,11 @@
 
 typedef struct {
     ngx_shm_zone_t             *shm_zone;
+} ngx_http_ctrl_main_conf_t;
+
+
+typedef struct {
+    ngx_flag_t                  stats_enable;
 } ngx_http_ctrl_loc_conf_t;
 
 
@@ -39,9 +44,8 @@ typedef struct {
 } ngx_http_ctrl_shctx_t;
 
 
-ngx_int_t ngx_http_ctrl_init_ctx(ngx_http_request_t *r);
-void ngx_http_ctrl_stats_code(ngx_http_request_t *r,
-    ngx_shm_zone_t *shm_zone);
+ngx_http_ctrl_ctx_t *ngx_http_ctrl_get_ctx(ngx_http_request_t *r);
+void ngx_http_ctrl_stats_code(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_stats_handler(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_response(ngx_http_request_t *r,
     nxt_uint_t status, nxt_str_t *body);

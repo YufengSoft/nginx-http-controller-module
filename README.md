@@ -33,15 +33,16 @@ Creates a shared zone ``NAME`` with the ``SIZE`` for storing statistics data.
 ctrl_stats
 ----------
 
-**syntax:**  *ctrl_stats ZONE_NAME*
+**syntax:**  *ctrl_stats on|off*
+
+**default:**  *ctrl_stats_display off*
 
 **context:** *http,server,location*
-
 
 ctrl_stats_display
 ------------------
 
-**syntax:**  *ctrl_stats_display ZONE_NAME*
+**syntax:**  *ctrl_stats_display*
 
 **context:** *location*
 
@@ -59,7 +60,7 @@ nginx.conf
             listen  80;
 
             location / {
-                ctrl_stats  stats;
+                ctrl_stats  on;
             }
         }
 
@@ -67,7 +68,7 @@ nginx.conf
             listen  8000;
 
             location /stats {
-                ctrl_stats_display  stats;
+                ctrl_stats_display;
             }
         }
     }

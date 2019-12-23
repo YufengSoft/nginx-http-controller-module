@@ -14,16 +14,19 @@ static nxt_conf_value_t *ngx_http_ctrl_stats_status(ngx_http_request_t *r,
 
 
 void
-ngx_http_ctrl_stats_code(ngx_http_request_t *r, ngx_shm_zone_t *shm_zone)
+ngx_http_ctrl_stats_code(ngx_http_request_t *r)
 {
     ngx_uint_t                     status;
     ngx_slab_pool_t               *shpool;
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
+    ngx_http_ctrl_main_conf_t      *cmcf;
 
-    shctx = shm_zone->data;
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
+
+    shctx = cmcf->shm_zone->data;
     stats = shctx->stats;
-    shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
+    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     ngx_shmtx_lock(&shpool->mutex);
 
@@ -56,7 +59,6 @@ ngx_http_ctrl_stats_handler(ngx_http_request_t *r)
 {
     size_t                    size;
     nxt_mp_t                 *mp;
-    ngx_int_t                 rc;
     nxt_str_t                 path, body;
     nxt_conf_value_t         *value, *stats;
     nxt_conf_value_t         *stub, *status;
@@ -66,15 +68,9 @@ ngx_http_ctrl_stats_handler(ngx_http_request_t *r)
     static nxt_str_t stub_str = nxt_string("stub");
     static nxt_str_t status_str = nxt_string("status");
 
-    rc = ngx_http_ctrl_init_ctx(r);
-    if (rc != NXT_OK) {
-        return NGX_ERROR;
-    }
-
-    ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
-
+    ctx = ngx_http_ctrl_get_ctx(r);
     if (ctx == NULL) {
-        return NGX_HTTP_NO_CONTENT;
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
     mp = ctx->mem_pool;
@@ -194,12 +190,14 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
     ngx_http_ctrl_loc_conf_t      *clcf;
+    ngx_http_ctrl_main_conf_t     *cmcf;
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
 
-    shctx = clcf->shm_zone->data;
+    shctx = cmcf->shm_zone->data;
     stats = shctx->stats;
-    shpool = (ngx_slab_pool_t *) clcf->shm_zone->shm.addr;
+    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     value = nxt_conf_create_object(mp, 6);
     if (nxt_slow_path(value == NULL)) {
