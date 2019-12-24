@@ -29,6 +29,7 @@ typedef struct {
     nxt_uint_t                      line;
     nxt_uint_t                      column;
 
+    nxt_str_t                       json;
     nxt_str_t                       response;
 } nxt_process_response_t;
 

@@ -13,7 +13,7 @@ static nxt_int_t nxt_process_response_init(nxt_process_request_t *req,
 static nxt_int_t nxt_process_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
     nxt_str_t *str);
 static nxt_int_t nxt_process_conf_store(nxt_process_request_t *req,
-    nxt_conf_value_t *value);
+    nxt_process_response_t *resp);
 
 
 static nxt_process_conf_t  *nxt_process_conf;
@@ -63,7 +63,7 @@ nxt_process_conf_read(nxt_mp_t *mp, nxt_file_t *file)
     static const nxt_str_t json = nxt_string("{ \"routes\": [] }");
 
     ret = nxt_file_open(file, NXT_FILE_RDWR, NXT_FILE_CREATE_OR_OPEN,
-                        NXT_FILE_OWNER_ACCESS);
+                        NXT_FILE_DEFAULT_ACCESS);
 
     start = NULL;
 
@@ -409,9 +409,14 @@ conf_done:
 
     ret = nxt_process_conf_apply(mp, value);
 
-    if (nxt_slow_path(ret == NXT_OK)) {
+    if (nxt_fast_path(ret == NXT_OK)) {
 
-        ret = nxt_process_conf_store(req, value);
+        ret = nxt_process_conf_stringify(req->mem_pool, value, &resp->json);
+        if (ret != NXT_OK) {
+            return ret;
+        }
+
+        ret = nxt_process_conf_store(req, resp);
         if (ret != NXT_OK) {
             return ret;
         }
@@ -522,28 +527,21 @@ nxt_process_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
 
 
 static nxt_int_t
-nxt_process_conf_store(nxt_process_request_t *req, nxt_conf_value_t *value)
+nxt_process_conf_store(nxt_process_request_t *req, nxt_process_response_t *resp)
 {
     ssize_t    n;
-    nxt_int_t  ret;
-    nxt_str_t  content;
 
     if (req->file->fd == NXT_FILE_INVALID) {
         return NXT_OK;
-    }
-
-    ret = nxt_process_conf_stringify(req->mem_pool, value, &content);
-    if (ret != NXT_OK) {
-        return ret;
     }
 
     if (ftruncate(req->file->fd, 0) == -1) {
         return NXT_ERROR;
     }
 
-    n = nxt_file_write(req->file, content.start, content.length, 0);
+    n = nxt_file_write(req->file, resp->json.start, resp->json.length, 0);
 
-    if (n != (ssize_t) content.length) {
+    if (n != (ssize_t) resp->json.length) {
         return NXT_ERROR;
     }
 

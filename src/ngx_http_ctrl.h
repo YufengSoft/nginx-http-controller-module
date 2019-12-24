@@ -82,11 +82,14 @@ ngx_int_t ngx_http_ctrl_set_variables(ngx_http_request_t *r,
     nxt_http_action_variables_t *variables);
 ngx_int_t ngx_http_ctrl_blacklist(ngx_http_request_t *r,
     nxt_http_action_addr_t *blacklist);
+ngx_int_t ngx_http_ctrl_whitelist(ngx_http_request_t *r,
+    nxt_http_action_addr_t *whitelist);
 void ngx_http_ctrl_stats_code(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_stats_handler(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_response(ngx_http_request_t *r,
     nxt_uint_t status, nxt_str_t *body);
 
+ngx_int_t ngx_http_ctrl_config_handler(ngx_http_request_t *r);
 void ngx_http_ctrl_notify_write_handler(ngx_event_t *rev);
 void ngx_http_ctrl_notify_read_handler(ngx_event_t *rev);
 

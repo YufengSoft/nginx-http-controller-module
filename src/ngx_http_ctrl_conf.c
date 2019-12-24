@@ -8,6 +8,7 @@
 
 static ngx_int_t ngx_http_ctrl_set_variable(ngx_http_request_t *r,
     u_char *name, uint16_t name_length, u_char *value, uint16_t value_length);
+static void ngx_http_ctrl_read_handler(ngx_http_request_t *r);
 static ngx_int_t ngx_http_ctrl_notify(ngx_http_request_t *r, nxt_str_t *notify);
 static void ngx_http_ctrl_conf_release(ngx_slab_pool_t *shpool,
     ngx_http_ctrl_conf_t *conf);
@@ -231,12 +232,53 @@ ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist
 
 
 ngx_int_t
+ngx_http_ctrl_whitelist(ngx_http_request_t *r, nxt_http_action_addr_t *whitelist)
+{
+    nxt_http_request_t         *req;
+    ngx_http_ctrl_ctx_t        *ctx;
+    nxt_http_addr_pattern_t    *p, *header, *end;
+
+    if (whitelist == NULL) {
+        return NGX_DECLINED;
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
+    req = ctx->req;
+
+    header = &whitelist->addr_pattern[0];
+    end = header + whitelist->items;
+
+    while (header < end) {
+        p = header;
+
+        if (nxt_http_addr_pattern_match(p, req->remote)) {
+            return NGX_OK;
+        }
+
+        header++;
+    }
+
+    return NGX_DECLINED;
+}
+
+
+ngx_int_t
 ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
+    ngx_slab_pool_t              *shpool;
     ngx_http_ctrl_ctx_t          *ctx;
+    ngx_http_ctrl_conf_t         *conf;
+    ngx_http_ctrl_shctx_t        *shctx;
     nxt_process_request_t         req;
     nxt_process_response_t        resp;
+    ngx_http_ctrl_main_conf_t    *cmcf;
+
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
+
+    shctx = cmcf->shm_zone->data;
+    conf = shctx->conf;
+    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
     if (ctx == NULL) {
@@ -245,12 +287,11 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
     switch (r->method) {
 
-    case NGX_HTTP_DELETE:
-
+    case NGX_HTTP_GET:
         ngx_memzero(&req, sizeof(nxt_process_request_t));
 
         req.mem_pool = ctx->mem_pool;
-        nxt_str_set(&req.method, "DELETE");
+        nxt_str_set(&req.method, "GET");
         req.path.start = r->uri.data;
         req.path.length = r->uri.len;;
 
@@ -259,7 +300,53 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        rc = ngx_http_ctrl_notify(r, NULL);
+        return ngx_http_ctrl_response(r, resp.status, &resp.response);
+
+    case NGX_HTTP_PUT:
+
+        ngx_shmtx_lock(&shpool->mutex);
+
+        if (conf->counter > 0) {
+            ngx_shmtx_unlock(&shpool->mutex);
+            return NGX_HTTP_NOT_ALLOWED;
+        }
+
+        ngx_shmtx_unlock(&shpool->mutex);
+
+        rc = ngx_http_read_client_request_body(r, ngx_http_ctrl_read_handler);
+
+        if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+            return rc;
+        }
+
+        return NGX_DONE;
+
+    case NGX_HTTP_DELETE:
+
+        ngx_shmtx_lock(&shpool->mutex);
+
+        if (conf->counter > 0) {
+            ngx_shmtx_unlock(&shpool->mutex);
+            return NGX_HTTP_NOT_ALLOWED;
+        }
+
+        ngx_shmtx_unlock(&shpool->mutex);
+
+        ngx_memzero(&req, sizeof(nxt_process_request_t));
+
+        req.mem_pool = ctx->mem_pool;
+        nxt_str_set(&req.method, "DELETE");
+        req.path.start = r->uri.data;
+        req.path.length = r->uri.len;;
+
+        req.file = &cmcf->file;
+
+        rc = nxt_process_config_handle(&req, &resp);
+        if (rc != NXT_OK) {
+            return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        rc = ngx_http_ctrl_notify(r, &resp.json);
         if (rc != NGX_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
@@ -269,6 +356,147 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
     default:
         return NGX_HTTP_NOT_ALLOWED;
     }
+}
+
+
+static ngx_int_t
+ngx_http_ctrl_request_body(ngx_http_request_t *r, ngx_str_t *body)
+{
+    u_char       *p;
+    size_t       len;
+    ssize_t      size;
+    ngx_buf_t    *b;
+    ngx_chain_t  *cl, *bufs;
+
+    if (r->request_body == NULL || r->request_body->bufs == NULL) {
+        return NGX_DECLINED;
+    }
+
+    len = 0;
+    bufs = r->request_body->bufs;
+
+    if (r->request_body->temp_file) {
+
+        for (cl = bufs; cl; cl = cl->next) {
+            b = cl->buf;
+            len += ngx_buf_size(b);
+        }
+
+        body->len = len;
+
+        p = ngx_pnalloc(r->pool, len);
+        if (p == NULL) {
+            return NGX_ERROR;
+        }
+
+        body->data = p;
+
+        for (cl = bufs; cl; cl = cl->next) {
+            b = cl->buf;
+
+            if (b->in_file) {
+                size = ngx_read_file(b->file, p, b->file_last - b->file_pos,
+                                     b->file_pos);
+
+                if (size == NGX_ERROR) {
+                    return NGX_ERROR;
+                }
+
+                p += size;
+
+            } else {
+                p = ngx_cpymem(p, b->pos, b->last - b->pos);
+            }
+        }
+
+    } else {
+        cl = bufs;
+        b = cl->buf;
+
+        if (cl->next == NULL) {
+            body->len = b->last - b->pos;
+            body->data = b->pos;
+
+        } else {
+
+            for ( /* void */ ; cl; cl = cl->next) {
+                b = cl->buf;
+                len += b->last - b->pos;
+            }
+
+            body->len = len;
+
+            p = ngx_pnalloc(r->pool, len);
+            if (p == NULL) {
+                return NGX_ERROR;
+            }
+
+            body->data = p;
+
+            for (cl = bufs; cl; cl = cl->next) {
+                b = cl->buf;
+                p = ngx_cpymem(p, b->pos, b->last - b->pos);
+            }
+        }
+    }
+
+    return NGX_OK;
+}
+
+
+static void
+ngx_http_ctrl_read_handler(ngx_http_request_t *r)
+{
+    ngx_int_t                     rc;
+    ngx_str_t                     body;
+    ngx_http_ctrl_ctx_t          *ctx;
+    nxt_process_request_t         req;
+    nxt_process_response_t        resp;
+    ngx_http_ctrl_main_conf_t    *cmcf;
+
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
+
+    rc = ngx_http_ctrl_request_body(r, &body);
+
+    if (rc == NGX_DECLINED) {
+        ngx_http_finalize_request(r, NGX_HTTP_NO_CONTENT);
+        return;
+    }
+
+    if (rc == NGX_ERROR) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
+
+    ngx_memzero(&req, sizeof(nxt_process_request_t));
+
+    req.mem_pool = ctx->mem_pool;
+    nxt_str_set(&req.method, "PUT");
+    req.path.start = r->uri.data;
+    req.path.length = r->uri.len;
+
+    req.body.start = body.data;
+    req.body.length = body.len;
+
+    req.file = &cmcf->file;
+
+    rc = nxt_process_config_handle(&req, &resp);
+    if (rc != NXT_OK) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+
+    rc = ngx_http_ctrl_notify(r, &resp.json);
+    if (rc != NGX_OK) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+
+    rc = ngx_http_ctrl_response(r, resp.status, &resp.response);
+
+    ngx_http_finalize_request(r, rc);
 }
 
 
@@ -291,7 +519,8 @@ ngx_http_ctrl_notify(ngx_http_request_t *r, nxt_str_t *notify)
     conf = shctx->conf;
     shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
-    b = ngx_alloc(sizeof(ngx_buf_t) + sizeof(nxt_port_msg_t), r->connection->log);
+    b = ngx_alloc(sizeof(ngx_buf_t) + sizeof(nxt_port_msg_t),
+                  r->connection->log);
     if (b == NULL) {
         return NGX_ERROR;
     }
