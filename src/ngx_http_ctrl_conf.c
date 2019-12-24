@@ -346,9 +346,11 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        rc = ngx_http_ctrl_notify(r, &resp.json);
-        if (rc != NGX_OK) {
-            return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        if (resp.status == 200) {
+            rc = ngx_http_ctrl_notify(r, &resp.json);
+            if (rc != NGX_OK) {
+                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+            }
         }
 
         return ngx_http_ctrl_response(r, resp.status, &resp.response);
@@ -488,10 +490,12 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
         return;
     }
 
-    rc = ngx_http_ctrl_notify(r, &resp.json);
-    if (rc != NGX_OK) {
-        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-        return;
+    if (resp.status == 200) {
+        rc = ngx_http_ctrl_notify(r, &resp.json);
+        if (rc != NGX_OK) {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
     }
 
     rc = ngx_http_ctrl_response(r, resp.status, &resp.response);

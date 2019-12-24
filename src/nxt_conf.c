@@ -2034,6 +2034,10 @@ nxt_conf_op_compile(nxt_mp_t *mp, nxt_conf_op_t **ops, nxt_conf_value_t *root,
 
         default:
             node = NULL;
+
+            if (parse.last) {
+                return NXT_CONF_OP_NOT_FOUND;
+            }
         }
 
         if (parse.last) {
