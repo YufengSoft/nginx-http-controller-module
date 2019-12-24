@@ -54,6 +54,11 @@ nxt_cpymem(void *dst, const void *src, size_t length)
 }
 
 
+#define                                                                       \
+nxt_memchr(s, c, length)                                                      \
+    memchr((char *) s, c, length)
+
+
 NXT_EXPORT nxt_int_t nxt_strncasecmp(const u_char *s1, const u_char *s2,
     size_t length);
 NXT_EXPORT nxt_int_t nxt_memcasecmp(const void *p1, const void *p2,

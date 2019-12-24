@@ -11,6 +11,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
+#define NXT_INET6                   NGX_HAVE_INET6
 #define NXT_PTR_SIZE                NGX_PTR_SIZE
 #define NXT_HAVE_MEMALIGN           NGX_HAVE_MEMALIGN
 #define NXT_HAVE_POSIX_MEMALIGN     NGX_HAVE_POSIX_MEMALIGN
@@ -21,6 +22,7 @@
 #include <nxt_mp.h>
 #include <nxt_string.h>
 #include <nxt_file.h>
+#include <nxt_sockaddr.h>
 #include <nxt_queue.h>
 #include <nxt_rbtree.h>
 #include <nxt_lvlhsh.h>
@@ -31,6 +33,10 @@
 #include <nxt_parse.h>
 #include <nxt_sprintf.h>
 #include <nxt_conf.h>
+#include <nxt_http.h>
+#include <nxt_http_addr.h>
+#include <nxt_http_route.h>
+#include <nxt_process.h>
 
 
 #endif /* _NXT_LIB_H_INCLUDED_ */

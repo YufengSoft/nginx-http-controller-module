@@ -61,6 +61,10 @@ static nxt_int_t nxt_conf_vldt_match_patterns_set(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value);
 static nxt_int_t nxt_conf_vldt_match_patterns_set_member(
     nxt_conf_validation_t *vldt, nxt_str_t *name, nxt_conf_value_t *value);
+static nxt_int_t nxt_conf_vldt_match_addrs(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+static nxt_int_t nxt_conf_vldt_match_addr(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value);
 
 static nxt_int_t nxt_conf_vldt_variable(nxt_conf_validation_t *vldt,
     nxt_str_t *name, nxt_conf_value_t *value);
@@ -121,9 +125,14 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_action_members[] = {
       &nxt_conf_vldt_object_iterator,
       (void *) &nxt_conf_vldt_variable },
 
-    { nxt_string("forbidden"),
-      NXT_CONF_VLDT_BOOLEAN,
-      NULL,
+    { nxt_string("blacklist"),
+      NXT_CONF_VLDT_STRING | NXT_CONF_VLDT_ARRAY,
+      &nxt_conf_vldt_match_addrs,
+      NULL },
+
+    { nxt_string("whitelist"),
+      NXT_CONF_VLDT_STRING | NXT_CONF_VLDT_ARRAY,
+      &nxt_conf_vldt_match_addrs,
       NULL },
 
     { nxt_string("add_headers"),
@@ -476,6 +485,59 @@ nxt_conf_vldt_match_pattern(nxt_conf_validation_t *vldt,
     }
 
     return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_match_addrs(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    if (nxt_conf_type(value) == NXT_CONF_ARRAY) {
+        return nxt_conf_vldt_array_iterator(vldt, value,
+                                            &nxt_conf_vldt_match_addr);
+    }
+
+    return nxt_conf_vldt_match_addr(vldt, value);
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_match_addr(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value)
+{
+    nxt_http_addr_pattern_t  pattern;
+
+    switch (nxt_http_addr_pattern_parse(vldt->pool, &pattern, value)) {
+
+    case NXT_OK:
+        return NXT_OK;
+
+    case NXT_ADDR_PATTERN_CV_TYPE_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"match\" pattern for "
+                                         "\"address\" must be a string.");
+
+    case NXT_ADDR_PATTERN_LENGTH_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"address\" is too short.");
+
+    case NXT_ADDR_PATTERN_FORMAT_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"address\" format is invalid.");
+
+    case NXT_ADDR_PATTERN_RANGE_OVERLAP_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"address\" range is "
+                                         "overlapping.");
+
+    case NXT_ADDR_PATTERN_CIDR_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"address\" has an invalid CIDR "
+                                         "prefix.");
+
+    case NXT_ADDR_PATTERN_NO_IPv6_ERROR:
+        return nxt_conf_vldt_error(vldt, "The \"address\" does not support "
+                                         "IPv6 with your configuration.");
+
+    default:
+        return nxt_conf_vldt_error(vldt, "The \"address\" has an unknown "
+                                         "format.");
+    }
 }
 
 

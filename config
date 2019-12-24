@@ -10,6 +10,7 @@ ngx_module_deps="$ngx_addon_dir/src/nxt_clang.h \
                  $ngx_addon_dir/src/nxt_mp.h \
                  $ngx_addon_dir/src/nxt_string.h \
                  $ngx_addon_dir/src/nxt_file.h \
+                 $ngx_addon_dir/src/nxt_sockaddr.h \
                  $ngx_addon_dir/src/nxt_queue.h \
                  $ngx_addon_dir/src/nxt_rbtree.h \
                  $ngx_addon_dir/src/nxt_lvlhsh.h \
@@ -21,6 +22,10 @@ ngx_module_deps="$ngx_addon_dir/src/nxt_clang.h \
                  $ngx_addon_dir/src/nxt_parse.h \
                  $ngx_addon_dir/src/nxt_sprintf.h \
                  $ngx_addon_dir/src/nxt_conf.h \
+                 $ngx_addon_dir/src/nxt_http.h \
+                 $ngx_addon_dir/src/nxt_http_addr.h \
+                 $ngx_addon_dir/src/nxt_http_route.h \
+                 $ngx_addon_dir/src/nxt_process.h \
                  $ngx_addon_dir/src/nxt_main.h \
                  $ngx_addon_dir/src/ngx_http_ctrl.h"
 
@@ -28,6 +33,7 @@ ngx_module_srcs="$ngx_addon_dir/src/nxt_malloc.c \
                  $ngx_addon_dir/src/nxt_mp.c \
                  $ngx_addon_dir/src/nxt_string.c \
                  $ngx_addon_dir/src/nxt_file.c \
+                 $ngx_addon_dir/src/nxt_sockaddr.c \
                  $ngx_addon_dir/src/nxt_rbtree.c \
                  $ngx_addon_dir/src/nxt_lvlhsh.c \
                  $ngx_addon_dir/src/nxt_list.c \
@@ -37,6 +43,12 @@ ngx_module_srcs="$ngx_addon_dir/src/nxt_malloc.c \
                  $ngx_addon_dir/src/nxt_parse.c \
                  $ngx_addon_dir/src/nxt_sprintf.c \
                  $ngx_addon_dir/src/nxt_conf.c \
+                 $ngx_addon_dir/src/nxt_conf_validation.c \
+                 $ngx_addon_dir/src/nxt_http.c \
+                 $ngx_addon_dir/src/nxt_http_addr.c \
+                 $ngx_addon_dir/src/nxt_http_route.c \
+                 $ngx_addon_dir/src/nxt_process.c \
+                 $ngx_addon_dir/src/ngx_http_ctrl_conf.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_stats.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_module.c"
 
