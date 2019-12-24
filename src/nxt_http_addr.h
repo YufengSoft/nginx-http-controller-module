@@ -42,13 +42,7 @@ typedef struct {
 
 typedef struct {
     uint8_t             match_type:2;
-    uint8_t             negative:1;
     uint8_t             addr_family;
-} nxt_http_addr_base_t;
-
-
-typedef struct {
-    nxt_http_addr_base_t            base;
 
     union {
         nxt_http_addr_range_t       v4;

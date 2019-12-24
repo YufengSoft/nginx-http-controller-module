@@ -20,7 +20,6 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
     u_char                 *delim;
     nxt_int_t              ret, cidr_prefix;
     nxt_str_t              addr;
-    nxt_http_addr_base_t   *base;
     nxt_http_addr_range_t  *inet;
 
     if (nxt_conf_type(cv) != NXT_CONF_STRING) {
@@ -28,18 +27,6 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
     }
 
     nxt_conf_get_string(cv, &addr);
-
-    base = &pattern->base;
-
-    if (addr.length > 0 && addr.start[0] == '!') {
-        addr.start++;
-        addr.length--;
-
-        base->negative = 1;
-
-    } else {
-        base->negative = 0;
-    }
 
     if (nxt_slow_path(addr.length < 2)) {
         return NXT_ADDR_PATTERN_LENGTH_ERROR;
@@ -51,7 +38,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
         nxt_int_t                  len;
         nxt_http_in6_addr_range_t  *inet6;
 
-        base->addr_family = AF_INET6;
+        pattern->addr_family = AF_INET6;
 
         if (addr.start[0] == '[') {
 
@@ -95,7 +82,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
                 return NXT_ADDR_PATTERN_RANGE_OVERLAP_ERROR;
             }
 
-            base->match_type = NXT_HTTP_ADDR_RANGE;
+            pattern->match_type = NXT_HTTP_ADDR_RANGE;
 
             return NXT_OK;
         }
@@ -121,18 +108,18 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
             }
 
             if (nxt_slow_path(cidr_prefix == 0)) {
-                base->match_type = NXT_HTTP_ADDR_ANY;
+                pattern->match_type = NXT_HTTP_ADDR_ANY;
 
                 return NXT_OK;
             }
 
             if (nxt_slow_path(cidr_prefix == 128)) {
-                base->match_type = NXT_HTTP_ADDR_EXACT;
+                pattern->match_type = NXT_HTTP_ADDR_EXACT;
 
                 return NXT_OK;
             }
 
-            base->match_type = NXT_HTTP_ADDR_CIDR;
+            pattern->match_type = NXT_HTTP_ADDR_CIDR;
 
             for (i = 0; i < sizeof(struct in6_addr); i++) {
                 if (cidr_prefix >= 8) {
@@ -157,7 +144,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
             return NXT_OK;
         }
 
-        base->match_type = NXT_HTTP_ADDR_EXACT;
+        pattern->match_type = NXT_HTTP_ADDR_EXACT;
 
         if (nxt_slow_path(!nxt_valid_ipv6_blocks(addr.start, addr.length))) {
             return NXT_ADDR_PATTERN_FORMAT_ERROR;
@@ -174,7 +161,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
         return NXT_ADDR_PATTERN_NO_IPv6_ERROR;
     }
 
-    base->addr_family = AF_INET;
+    pattern->addr_family = AF_INET;
     
     inet = &pattern->addr.v4;
 
@@ -198,7 +185,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
             return NXT_ADDR_PATTERN_RANGE_OVERLAP_ERROR;
         }
 
-        base->match_type = NXT_HTTP_ADDR_RANGE;
+        pattern->match_type = NXT_HTTP_ADDR_RANGE;
 
         return NXT_OK;
     }
@@ -220,10 +207,10 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
         }
 
         if (cidr_prefix == 0) {
-            base->match_type = NXT_HTTP_ADDR_ANY;
+            pattern->match_type = NXT_HTTP_ADDR_ANY;
 
         } else if (cidr_prefix < 32) {
-            base->match_type = NXT_HTTP_ADDR_CIDR;
+            pattern->match_type = NXT_HTTP_ADDR_CIDR;
         }
 
         return NXT_OK;
@@ -234,7 +221,7 @@ nxt_http_addr_pattern_parse(nxt_mp_t *mp, nxt_http_addr_pattern_t *pattern,
         return NXT_ADDR_PATTERN_FORMAT_ERROR;
     }
 
-    base->match_type = NXT_HTTP_ADDR_EXACT;
+    pattern->match_type = NXT_HTTP_ADDR_EXACT;
 
     return NXT_OK;
 }
@@ -300,23 +287,20 @@ nxt_http_addr_pattern_match(nxt_http_addr_pattern_t *p, nxt_sockaddr_t *sa)
 #if (NXT_INET6)
     struct sockaddr_in6   *sin6;
 #endif
-    nxt_http_addr_base_t  *base;
-
-    base = &p->base;
 
     switch (sa->u.sockaddr.sa_family) {
 
     case AF_INET:
 
-        match = (base->addr_family == AF_INET
-                 || base->addr_family == AF_UNSPEC);
+        match = (p->addr_family == AF_INET
+                 || p->addr_family == AF_UNSPEC);
         if (!match) {
             break;
         }
 
         sin = &sa->u.sockaddr_in;
 
-        switch (base->match_type) {
+        switch (p->match_type) {
 
         case NXT_HTTP_ADDR_ANY:
             break;
@@ -347,15 +331,15 @@ nxt_http_addr_pattern_match(nxt_http_addr_pattern_t *p, nxt_sockaddr_t *sa)
 #if (NXT_INET6)
     case AF_INET6:
 
-        match = (base->addr_family == AF_INET6
-                 || base->addr_family == AF_UNSPEC);
+        match = (p->addr_family == AF_INET6
+                 || p->addr_family == AF_UNSPEC);
         if (!match) {
             break;
         }
 
         sin6 = &sa->u.sockaddr_in6;
 
-        switch (base->match_type) {
+        switch (p->match_type) {
 
         case NXT_HTTP_ADDR_ANY:
             break;
@@ -399,5 +383,5 @@ nxt_http_addr_pattern_match(nxt_http_addr_pattern_t *p, nxt_sockaddr_t *sa)
 
     }
 
-    return match ^ base->negative;
+    return match;
 }
