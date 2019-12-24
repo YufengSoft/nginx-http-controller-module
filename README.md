@@ -138,7 +138,8 @@ Enjoy.
 Zhidao Hong(洪志道) `hongzhidao at gmail dot com`  
 
 ## Copyright & License
-I borrowed a lot of code from nginx/unit for basic infrastructure. This part of code is copyrighted by Igor Sysoev. 
+I borrowed a lot of code from nginx/unit for basic infrastructure, this part of code is copyrighted by Igor Sysoev.
+I also borrowed a lot of code from arut/nginx-live-module, this part of code is copyrighted by Roman Arutyunyan.
 
 This module is licensed under the BSD license.  
 ```bash
