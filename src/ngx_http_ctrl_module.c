@@ -18,6 +18,7 @@ static void *ngx_http_ctrl_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_ctrl_merge_loc_conf(ngx_conf_t *cf, void *parent,
     void *child);
 static char *ngx_http_ctrl_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *ngx_http_ctrl_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_ctrl_config(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_ctrl_stats_display(ngx_conf_t *cf, ngx_command_t *cmd,void *conf);
 
@@ -36,6 +37,13 @@ static ngx_command_t  ngx_http_ctrl_commands[] = {
       ngx_conf_set_str_slot,
       NGX_HTTP_MAIN_CONF_OFFSET,
       offsetof(ngx_http_ctrl_main_conf_t, state),
+      NULL },
+
+    { ngx_string("ctrl_set"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE2,
+      ngx_http_ctrl_set,
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      0,
       NULL },
 
     { ngx_string("ctrl"),
@@ -762,6 +770,64 @@ ngx_http_ctrl_zone(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     shm_zone->data = ctx;
 
     cmcf->shm_zone = shm_zone;
+
+    return NGX_CONF_OK;
+}
+
+
+static ngx_int_t
+ngx_http_ctrl_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v,
+    uintptr_t data)
+{
+    ngx_str_t *var = (ngx_str_t *) data;
+
+    v->len = var->len;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = var->data;
+
+    return NGX_OK;
+}
+
+
+static char *
+ngx_http_ctrl_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_int_t                   index;
+    ngx_str_t                  *value, *var;
+    ngx_http_variable_t        *v;
+
+    value = cf->args->elts;
+
+    if (value[1].data[0] != '$') {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid variable name \"%V\"", &value[1]);
+        return NGX_CONF_ERROR;
+    }
+
+    value[1].len--;
+    value[1].data++;
+
+    v = ngx_http_add_variable(cf, &value[1], NGX_HTTP_VAR_CHANGEABLE);
+    if (v == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    index = ngx_http_get_variable_index(cf, &value[1]);
+    if (index == NGX_ERROR) {
+        return NGX_CONF_ERROR;
+    }
+
+    var = ngx_palloc(cf->pool, sizeof(ngx_str_t));
+    if (var == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    *var = value[2];
+
+    v->get_handler = ngx_http_ctrl_variable;
+    v->data = (uintptr_t) var;
 
     return NGX_CONF_OK;
 }
