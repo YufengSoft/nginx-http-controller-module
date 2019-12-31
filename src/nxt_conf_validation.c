@@ -505,9 +505,9 @@ static nxt_int_t
 nxt_conf_vldt_match_addr(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value)
 {
-    nxt_http_addr_pattern_t  pattern;
+    nxt_addr_pattern_t  pattern;
 
-    switch (nxt_http_addr_pattern_parse(vldt->pool, &pattern, value)) {
+    switch (nxt_addr_pattern_parse(vldt->pool, &pattern, value)) {
 
     case NXT_OK:
         return NXT_OK;

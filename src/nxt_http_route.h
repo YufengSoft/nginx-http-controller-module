@@ -19,7 +19,7 @@ typedef struct {
 
 typedef struct {
     uint32_t                        items;
-    nxt_http_addr_pattern_t         addr_pattern[0];
+    nxt_addr_pattern_t              addr_pattern[0];
 } nxt_http_action_addr_t;
 
 

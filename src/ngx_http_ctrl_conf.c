@@ -203,9 +203,9 @@ ngx_http_ctrl_set_variable(ngx_http_request_t *r, u_char *name,
 ngx_int_t
 ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist)
 {
+    nxt_addr_pattern_t         *p, *header, *end;
     nxt_http_request_t         *req;
     ngx_http_ctrl_ctx_t        *ctx;
-    nxt_http_addr_pattern_t    *p, *header, *end;
 
     if (blacklist == NULL) {
         return NGX_DECLINED;
@@ -220,7 +220,7 @@ ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist
     while (header < end) {
         p = header;
 
-        if (nxt_http_addr_pattern_match(p, req->remote)) {
+        if (nxt_addr_pattern_match(p, req->remote)) {
             return NGX_OK;
         }
 
@@ -234,9 +234,9 @@ ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist
 ngx_int_t
 ngx_http_ctrl_whitelist(ngx_http_request_t *r, nxt_http_action_addr_t *whitelist)
 {
+    nxt_addr_pattern_t         *p, *header, *end;
     nxt_http_request_t         *req;
     ngx_http_ctrl_ctx_t        *ctx;
-    nxt_http_addr_pattern_t    *p, *header, *end;
 
     if (whitelist == NULL) {
         return NGX_DECLINED;
@@ -251,7 +251,7 @@ ngx_http_ctrl_whitelist(ngx_http_request_t *r, nxt_http_action_addr_t *whitelist
     while (header < end) {
         p = header;
 
-        if (nxt_http_addr_pattern_match(p, req->remote)) {
+        if (nxt_addr_pattern_match(p, req->remote)) {
             return NGX_OK;
         }
 

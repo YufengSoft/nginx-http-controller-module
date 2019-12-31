@@ -728,9 +728,9 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
     nxt_conf_value_t               *headers_conf, *header_conf;
     nxt_conf_value_t               *variables_conf, *variable_conf;
     nxt_conf_value_t               *blacklist_conf, *whitelist_conf;
+    nxt_addr_pattern_t             *pattern;
     nxt_http_name_value_t          *nv;
     nxt_http_action_addr_t         *blacklist, *whitelist;
-    nxt_http_addr_pattern_t        *pattern;
     nxt_http_action_headers_t      *headers;
     nxt_http_action_variables_t    *variables;
     nxt_http_route_action_conf_t   accf;
@@ -796,7 +796,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         n = array ? nxt_conf_array_elements_count(blacklist_conf) : 1;
 
         size = sizeof(nxt_http_action_addr_t)
-               + n * sizeof(nxt_http_addr_pattern_t *);
+               + n * sizeof(nxt_addr_pattern_t *);
 
         blacklist = nxt_mp_alloc(mp, size);
         if (nxt_slow_path(blacklist == NULL)) {
@@ -808,7 +808,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         if (!array) {
             pattern = &blacklist->addr_pattern[0];
 
-            ret = nxt_http_addr_pattern_parse(mp, pattern, blacklist_conf);
+            ret = nxt_addr_pattern_parse(mp, pattern, blacklist_conf);
             if (ret != NXT_OK) {
                 return ret;
             }
@@ -818,7 +818,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
                 pattern = &blacklist->addr_pattern[i];
                 addr_conf = nxt_conf_get_array_element(blacklist_conf, i);
 
-                ret = nxt_http_addr_pattern_parse(mp, pattern, addr_conf);
+                ret = nxt_addr_pattern_parse(mp, pattern, addr_conf);
                 if (ret != NXT_OK) {
                     return ret;
                 }
@@ -836,7 +836,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         n = array ? nxt_conf_array_elements_count(whitelist_conf) : 1;
 
         size = sizeof(nxt_http_action_addr_t)
-               + n * sizeof(nxt_http_addr_pattern_t *);
+               + n * sizeof(nxt_addr_pattern_t *);
 
         whitelist = nxt_mp_alloc(mp, size);
         if (nxt_slow_path(whitelist == NULL)) {
@@ -848,7 +848,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         if (!array) {
             pattern = &whitelist->addr_pattern[0];
 
-            ret = nxt_http_addr_pattern_parse(mp, pattern, whitelist_conf);
+            ret = nxt_addr_pattern_parse(mp, pattern, whitelist_conf);
             if (ret != NXT_OK) {
                 return ret;
             }
@@ -858,7 +858,7 @@ nxt_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
                 pattern = &whitelist->addr_pattern[i];
                 addr_conf = nxt_conf_get_array_element(whitelist_conf, i);
 
-                ret = nxt_http_addr_pattern_parse(mp, pattern, addr_conf);
+                ret = nxt_addr_pattern_parse(mp, pattern, addr_conf);
                 if (ret != NXT_OK) {
                     return ret;
                 }

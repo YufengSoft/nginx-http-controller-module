@@ -33,8 +33,8 @@
 #include <nxt_parse.h>
 #include <nxt_sprintf.h>
 #include <nxt_conf.h>
+#include <nxt_addr.h>
 #include <nxt_http.h>
-#include <nxt_http_addr.h>
 #include <nxt_http_route.h>
 #include <nxt_http_conf.h>
 
