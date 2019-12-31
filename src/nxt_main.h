@@ -34,9 +34,6 @@
 #include <nxt_sprintf.h>
 #include <nxt_conf.h>
 #include <nxt_addr.h>
-#include <nxt_http.h>
-#include <nxt_http_route.h>
-#include <nxt_http_conf.h>
 
 
 #endif /* _NXT_LIB_H_INCLUDED_ */

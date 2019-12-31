@@ -12,6 +12,9 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include <nxt_main.h>
+#include <ngx_http_init.h>
+#include <ngx_http_route.h>
+#include <ngx_http_conf.h>
 
 
 typedef struct {
@@ -38,8 +41,8 @@ typedef struct {
     nxt_mp_t                   *mem_pool;
 
     nxt_http_request_t         *req;
-    nxt_http_action_t          *action;
-    nxt_http_conf_t            *http_conf;
+    ngx_http_action_t          *action;
+    ngx_http_conf_t            *http_conf;
 } ngx_http_ctrl_ctx_t;
 
 
@@ -79,11 +82,11 @@ typedef struct {
 ngx_http_ctrl_ctx_t *ngx_http_ctrl_get_ctx(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_request_init(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_set_variables(ngx_http_request_t *r,
-    nxt_http_action_variables_t *variables);
+    ngx_http_action_variables_t *variables);
 ngx_int_t ngx_http_ctrl_blacklist(ngx_http_request_t *r,
-    nxt_http_action_addr_t *blacklist);
+    ngx_http_action_addr_t *blacklist);
 ngx_int_t ngx_http_ctrl_whitelist(ngx_http_request_t *r,
-    nxt_http_action_addr_t *whitelist);
+    ngx_http_action_addr_t *whitelist);
 void ngx_http_ctrl_stats_code(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_stats_handler(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_response(ngx_http_request_t *r,

@@ -24,8 +24,8 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
     ngx_uint_t                 i, j;
     ngx_list_part_t           *part;
     ngx_table_elt_t           *header;
-    nxt_http_field_t          *field;
-    nxt_http_action_t         *action;
+    ngx_http_field_t          *field;
+    ngx_http_action_t         *action;
     nxt_http_request_t        *req;
     ngx_http_ctrl_ctx_t       *ctx;
 
@@ -52,7 +52,7 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
     req->args.length = r->args.len;
     req->args.start = r->args.data;
 
-    req->fields = nxt_list_create(req->mem_pool, 8, sizeof(nxt_http_field_t));
+    req->fields = nxt_list_create(req->mem_pool, 8, sizeof(ngx_http_field_t));
     if (nxt_slow_path(req->fields == NULL)) {
         return NGX_ERROR;
     }
@@ -85,15 +85,15 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
         field->name = header[i].key.data;
         field->value = header[i].value.data;
 
-        hash = NXT_HTTP_FIELD_HASH_INIT;
+        hash = NGX_HTTP_FIELD_HASH_INIT;
 
         for (j = 0; j < field->name_length; j++) {
             c = field->name[j];
             c = nxt_lowcase(c);
-            hash = nxt_http_field_hash_char(hash, c);
+            hash = ngx_http_field_hash_char(hash, c);
         }
 
-        field->hash = nxt_http_field_hash_end(hash) & 0xFFFF;
+        field->hash = ngx_http_field_hash_end(hash) & 0xFFFF;
     }
 
     req->remote = nxt_mp_alloc(req->mem_pool, sizeof(nxt_sockaddr_t));
@@ -104,8 +104,8 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
     nxt_memcpy(&req->remote->u.sockaddr, r->connection->sockaddr,
                sizeof(ngx_sockaddr_t));
 
-    action = nxt_http_conf_action(req, &ctx->http_conf);
-    if (action == NXT_HTTP_ACTION_ERROR) {
+    action = ngx_http_conf_action(req, &ctx->http_conf);
+    if (action == NGX_HTTP_ACTION_ERROR) {
         return NGX_ERROR;
     }
 
@@ -116,10 +116,10 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
 
 
 ngx_int_t
-ngx_http_ctrl_set_variables(ngx_http_request_t *r, nxt_http_action_variables_t *variables)
+ngx_http_ctrl_set_variables(ngx_http_request_t *r, ngx_http_action_variables_t *variables)
 {
     ngx_int_t                  rc;
-    nxt_http_name_value_t     *nv, **variable, **end;
+    ngx_http_name_value_t     *nv, **variable, **end;
 
     if (variables == NULL) {
         return NGX_OK;
@@ -201,7 +201,7 @@ ngx_http_ctrl_set_variable(ngx_http_request_t *r, u_char *name,
 
 
 ngx_int_t
-ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist)
+ngx_http_ctrl_blacklist(ngx_http_request_t *r, ngx_http_action_addr_t *blacklist)
 {
     nxt_addr_pattern_t         *p, *header, *end;
     nxt_http_request_t         *req;
@@ -232,7 +232,7 @@ ngx_http_ctrl_blacklist(ngx_http_request_t *r, nxt_http_action_addr_t *blacklist
 
 
 ngx_int_t
-ngx_http_ctrl_whitelist(ngx_http_request_t *r, nxt_http_action_addr_t *whitelist)
+ngx_http_ctrl_whitelist(ngx_http_request_t *r, ngx_http_action_addr_t *whitelist)
 {
     nxt_addr_pattern_t         *p, *header, *end;
     nxt_http_request_t         *req;
@@ -269,7 +269,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
     ngx_slab_pool_t              *shpool;
     nxt_http_request_t            req;
     ngx_http_ctrl_ctx_t          *ctx;
-    nxt_http_conf_init_t          init;
+    ngx_http_conf_init_t          init;
     ngx_http_ctrl_conf_t         *conf;
     ngx_http_ctrl_shctx_t        *shctx;
     ngx_http_ctrl_main_conf_t    *cmcf;
@@ -289,15 +289,15 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
     case NGX_HTTP_GET:
         ngx_memzero(&req, sizeof(nxt_http_request_t));
-        nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
+        nxt_memzero(&init, sizeof(ngx_http_conf_init_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "GET");
         req.path.start = r->uri.data;
         req.path.length = r->uri.len;;
 
-        rc = nxt_http_conf_handle(&req, &init);
-        if (rc != NXT_OK) {
+        rc = ngx_http_conf_handle(&req, &init);
+        if (rc != NGX_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
@@ -334,7 +334,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
         ngx_shmtx_unlock(&shpool->mutex);
 
         ngx_memzero(&req, sizeof(nxt_http_request_t));
-        nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
+        nxt_memzero(&init, sizeof(ngx_http_conf_init_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "DELETE");
@@ -343,8 +343,8 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
         init.file = &cmcf->file;
 
-        rc = nxt_http_conf_handle(&req, &init);
-        if (rc != NXT_OK) {
+        rc = ngx_http_conf_handle(&req, &init);
+        if (rc != NGX_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
@@ -455,7 +455,7 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
     ngx_str_t                     body;
     nxt_http_request_t            req;
     ngx_http_ctrl_ctx_t          *ctx;
-    nxt_http_conf_init_t          init;
+    ngx_http_conf_init_t          init;
     ngx_http_ctrl_main_conf_t    *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
@@ -475,7 +475,7 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
 
     ngx_memzero(&req, sizeof(nxt_http_request_t));
-    nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
+    nxt_memzero(&init, sizeof(ngx_http_conf_init_t));
 
     req.mem_pool = ctx->mem_pool;
     nxt_str_set(&req.method, "PUT");
@@ -487,8 +487,8 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 
     init.file = &cmcf->file;
 
-    rc = nxt_http_conf_handle(&req, &init);
-    if (rc != NXT_OK) {
+    rc = ngx_http_conf_handle(&req, &init);
+    if (rc != NGX_OK) {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
@@ -659,7 +659,7 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
     ssize_t                     n;
     u_char                     *start, *end;
     nxt_mp_t                   *mp;
-    nxt_int_t                  ret;
+    ngx_int_t                   rc;
     ngx_buf_t                  *b;
     ngx_str_t                  *json;
     nxt_port_msg_t             *msg;
@@ -734,8 +734,8 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
         return;
     }
 
-    ret = nxt_http_conf_apply(mp, value);
-    if (nxt_slow_path(ret != NXT_OK)) {
+    rc = ngx_http_conf_apply(mp, value);
+    if (rc != NGX_OK) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                       "router conf apply failed.");
         nxt_mp_destroy(mp);
