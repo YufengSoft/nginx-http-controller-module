@@ -22,7 +22,7 @@ use Test::Nginx;
 select STDERR; $| = 1;
 select STDOUT; $| = 1;
 
-my $t = Test::Nginx->new()->has(qw/http controller/)->plan(11);
+my $t = Test::Nginx->new()->has(qw/http controller/)->plan(15);
 
 $t->write_file_expand('nginx.conf', <<'EOF');
 
@@ -93,6 +93,12 @@ like(http_delete('/config/routes/0/action/blacklist'), qr/Reconfiguration done/,
 like(http_get('/'), qr/test ok/, '200 ok');
 
 like(http_put('/config/routes/0/action/whitelist', '"127.0.0.2"'), qr/Reconfiguration done/, 'PUT configuration');
+like(http_get('/'), qr/403/, 'forbidden');
+
+like(http_put('/config/routes/0/match', '{"host": "somehost"}'), qr/Reconfiguration done/, 'PUT configuration');
+like(http_get('/'), qr/test ok/, '200 ok');
+
+like(http_put('/config/routes/0/match/host', '"localhost"'), qr/Reconfiguration done/, 'PUT configuration');
 like(http_get('/'), qr/403/, 'forbidden');
 
 ###############################################################################

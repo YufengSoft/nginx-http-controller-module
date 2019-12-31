@@ -4,18 +4,14 @@
  * Copyright (C) NGINX, Inc.
  */
 
-#include <nxt_main.h>
-#include <ngx_http_init.h>
-#include <ngx_http_route.h>
-#include <ngx_http_conf.h>
+#include <ngx_http_ctrl.h>
 
 
 static nxt_conf_value_t *ngx_http_conf_read(nxt_mp_t *mp, nxt_file_t *file);
-static ngx_int_t ngx_http_response_init(nxt_http_request_t *r,
-    ngx_http_conf_init_t *init);
+static ngx_int_t ngx_http_response_init(nxt_http_request_t *req);
 static ngx_int_t ngx_http_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
     nxt_str_t *str);
-static ngx_int_t ngx_http_conf_store(ngx_http_conf_init_t *init);
+static ngx_int_t ngx_http_conf_store(nxt_http_request_t *req);
 
 
 static ngx_http_conf_t  *ngx_http_conf;
@@ -165,7 +161,7 @@ ngx_http_conf_apply(nxt_mp_t *mp, nxt_conf_value_t *conf)
 
 
 ngx_http_action_t *
-ngx_http_conf_action(nxt_http_request_t *r, ngx_http_conf_t **http_conf)
+ngx_http_conf_action(ngx_http_request_t *r, ngx_http_conf_t **http_conf)
 {
     if (ngx_http_conf == NULL) {
         return NULL;
@@ -195,11 +191,11 @@ ngx_http_conf_release(ngx_http_conf_t *http_conf)
 
 
 ngx_int_t
-ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
+ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
 {
     nxt_mp_t               *mp;
     nxt_int_t              ret;
-    nxt_str_t              *path;
+    nxt_str_t              path;
     nxt_conf_op_t          *ops;
     nxt_conf_value_t       *value;
     nxt_conf_validation_t  vldt;
@@ -207,35 +203,36 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
 
     static const nxt_str_t empty_obj = nxt_string("{}");
 
-    path = &r->path;
+    path.length = r->uri.len;
+    path.start = r->uri.data;
 
-    if (nxt_str_start(path, "/config", 7)
-        && (path->length == 7 || path->start[7] == '/'))
+    if (nxt_str_start(&path, "/config", 7)
+        && (path.length == 7 || path.start[7] == '/'))
     {
-        if (path->length == 7) {
-            path->length = 1;
+        if (path.length == 7) {
+            path.length = 1;
 
         } else {
-            path->length -= 7;
-            path->start += 7;
+            path.length -= 7;
+            path.start += 7;
         }
     }
 
-    if (nxt_str_eq(&r->method, "GET", 3)) {
+    if (r->method == NGX_HTTP_GET) {
 
-        value = nxt_conf_get_path(ngx_http_conf->root, path);
+        value = nxt_conf_get_path(ngx_http_conf->root, &path);
 
         if (value == NULL) {
             goto not_found;
         }
 
-        init->status = 200;
-        init->conf = value;
+        req->status = 200;
+        req->conf = value;
 
-        return ngx_http_response_init(r, init);
+        return ngx_http_response_init(req);
     }
 
-    if (nxt_str_eq(&r->method, "PUT", 3)) {
+    if (r->method == NGX_HTTP_PUT) {
 
         mp = nxt_mp_create(1024, 128, 256, 32);
         if (nxt_slow_path(mp == NULL)) {
@@ -244,8 +241,8 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
 
         nxt_memzero(&error, sizeof(nxt_conf_json_error_t));
 
-        value = nxt_conf_json_parse(mp, r->body.start,
-                                    r->body.start + r->body.length, &error);
+        value = nxt_conf_json_parse(mp, req->body.start,
+                                    req->body.start + req->body.length, &error);
 
         if (value == NULL) {
             nxt_mp_destroy(mp);
@@ -254,21 +251,21 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
                 goto alloc_fail;
             }
 
-            init->status = 400;
-            init->title = (u_char *) "Invalid JSON.";
-            init->detail.length = nxt_strlen(error.detail);
-            init->detail.start = error.detail;
-            init->offset = error.pos - r->body.start;
+            req->status = 400;
+            req->title = (u_char *) "Invalid JSON.";
+            req->detail.length = nxt_strlen(error.detail);
+            req->detail.start = error.detail;
+            req->offset = error.pos - req->body.start;
 
-            nxt_conf_json_position(r->body.start, error.pos,
-                                   &init->line, &init->column);
+            nxt_conf_json_position(req->body.start, error.pos,
+                                   &req->line, &req->column);
 
-            return ngx_http_response_init(r, init);
+            return ngx_http_response_init(req);
         }
 
-        if (path->length != 1) {
-            ret = nxt_conf_op_compile(r->mem_pool, &ops, ngx_http_conf->root,
-                                      path, value, 0);
+        if (path.length != 1) {
+            ret = nxt_conf_op_compile(req->mem_pool, &ops, ngx_http_conf->root,
+                                      &path, value, 0);
 
             if (ret != NXT_CONF_OP_OK) {
                 nxt_mp_destroy(mp);
@@ -296,7 +293,7 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
         nxt_memzero(&vldt, sizeof(nxt_conf_validation_t));
 
         vldt.conf = value;
-        vldt.pool = r->mem_pool;
+        vldt.pool = req->mem_pool;
 
         ret = nxt_conf_validate(&vldt);
 
@@ -304,7 +301,7 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
             nxt_mp_destroy(mp);
 
             if (ret == NXT_DECLINED) {
-                init->detail = vldt.error;
+                req->detail = vldt.error;
                 goto invalid_conf;
             }
 
@@ -315,9 +312,9 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
         goto conf_done;
     }
 
-    if (nxt_str_eq(&r->method, "DELETE", 6)) {
+    if (r->method == NGX_HTTP_DELETE) {
 
-        if (path->length == 1) {
+        if (path.length == 1) {
             mp = nxt_mp_create(1024, 128, 256, 32);
             if (nxt_slow_path(mp == NULL)) {
                 goto alloc_fail;
@@ -326,8 +323,8 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
             value = nxt_conf_json_parse_str(mp, &empty_obj);
 
         } else {
-            ret = nxt_conf_op_compile(r->mem_pool, &ops, ngx_http_conf->root,
-                                      path, NULL, 0);
+            ret = nxt_conf_op_compile(req->mem_pool, &ops, ngx_http_conf->root,
+                                      &path, NULL, 0);
 
             if (ret != NXT_OK) {
                 if (ret == NXT_CONF_OP_NOT_FOUND) {
@@ -362,7 +359,7 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
             nxt_mp_destroy(mp);
 
             if (ret == NXT_DECLINED) {
-                init->detail = vldt.error;
+                req->detail = vldt.error;
                 goto invalid_conf;
             }
 
@@ -375,35 +372,35 @@ ngx_http_conf_handle(nxt_http_request_t *r, ngx_http_conf_init_t *init)
 
     not_allowed:
 
-    init->status = 405;
-    init->title = (u_char *) "Method isn't allowed.";
-    init->offset = -1;
+    req->status = 405;
+    req->title = (u_char *) "Method isn't allowed.";
+    req->offset = -1;
 
-    return ngx_http_response_init(r, init);
+    return ngx_http_response_init(req);
 
 not_found:
 
-    init->status = 404;
-    init->title = (u_char *) "Value doesn't exist.";
-    init->offset = -1;
+    req->status = 404;
+    req->title = (u_char *) "Value doesn't exist.";
+    req->offset = -1;
 
-    return ngx_http_response_init(r, init);
+    return ngx_http_response_init(req);
 
 invalid_conf:
 
-    init->status = 400;
-    init->title = (u_char *) "Invalid configuration.";
-    init->offset = -1;
+    req->status = 400;
+    req->title = (u_char *) "Invalid configuration.";
+    req->offset = -1;
 
-    return ngx_http_response_init(r, init);
+    return ngx_http_response_init(req);
 
 alloc_fail:
 
-    init->status = 500;
-    init->title = (u_char *) "Memory allocation failed.";
-    init->offset = -1;
+    req->status = 500;
+    req->title = (u_char *) "Memory allocation failed.";
+    req->offset = -1;
 
-    return ngx_http_response_init(r, init);
+    return ngx_http_response_init(req);
 
 conf_done:
 
@@ -411,31 +408,31 @@ conf_done:
 
     if (nxt_fast_path(ret == NXT_OK)) {
 
-        ret = ngx_http_conf_stringify(r->mem_pool, value, &init->json);
+        ret = ngx_http_conf_stringify(req->mem_pool, value, &req->json);
         if (ret != NXT_OK) {
             return ret;
         }
 
-        ret = ngx_http_conf_store(init);
+        ret = ngx_http_conf_store(req);
         if (ret != NXT_OK) {
             return ret;
         }
 
-        init->status = 200;
-        init->title = (u_char *) "Reconfiguration done.";
+        req->status = 200;
+        req->title = (u_char *) "Reconfiguration done.";
 
     } else {
-        init->status = 500;
-        init->title = (u_char *) "Conf apply failed.";
-        init->offset = -1;
+        req->status = 500;
+        req->title = (u_char *) "Conf apply failed.";
+        req->offset = -1;
     }
 
-    return ngx_http_response_init(r, init);
+    return ngx_http_response_init(req);
 }
 
 
 static ngx_int_t
-ngx_http_response_init(nxt_http_request_t *r, ngx_http_conf_init_t *init)
+ngx_http_response_init(nxt_http_request_t *req)
 {
     nxt_mp_t          *mp;
     nxt_str_t         str;
@@ -450,23 +447,23 @@ ngx_http_response_init(nxt_http_request_t *r, ngx_http_conf_init_t *init)
     static nxt_str_t  line_str = nxt_string("line");
     static nxt_str_t  column_str = nxt_string("column");
 
-    mp = r->mem_pool;
-    value = init->conf;
+    mp = req->mem_pool;
+    value = req->conf;
 
     if (value == NULL) {
         n = 1
-            + (init->detail.length != 0)
-            + (init->status >= 400 && init->offset != -1);
+            + (req->detail.length != 0)
+            + (req->status >= 400 && req->offset != -1);
 
         value = nxt_conf_create_object(mp, n);
         if (nxt_slow_path(value == NULL)) {
             return NGX_ERROR;
         }
 
-        str.length = nxt_strlen(init->title);
-        str.start = init->title;
+        str.length = nxt_strlen(req->title);
+        str.start = req->title;
 
-        if (init->status < 400) {
+        if (req->status < 400) {
             nxt_conf_set_member_string(value, &success_str, &str, 0);
 
         } else {
@@ -475,32 +472,32 @@ ngx_http_response_init(nxt_http_request_t *r, ngx_http_conf_init_t *init)
 
         n = 0;
 
-        if (init->detail.length != 0) {
+        if (req->detail.length != 0) {
             n++;
 
-            nxt_conf_set_member_string(value, &detail_str, &init->detail, n);
+            nxt_conf_set_member_string(value, &detail_str, &req->detail, n);
         }
 
-        if (init->status >= 400 && init->offset != -1) {
+        if (req->status >= 400 && req->offset != -1) {
             n++;
 
-            location = nxt_conf_create_object(mp, init->line != 0 ? 3 : 1);
+            location = nxt_conf_create_object(mp, req->line != 0 ? 3 : 1);
 
             nxt_conf_set_member(value, &location_str, location, n);
 
-            nxt_conf_set_member_integer(location, &offset_str, init->offset, 0);
+            nxt_conf_set_member_integer(location, &offset_str, req->offset, 0);
 
-            if (init->line != 0) {
+            if (req->line != 0) {
                 nxt_conf_set_member_integer(location, &line_str,
-                                            init->line, 1);
+                                            req->line, 1);
 
                 nxt_conf_set_member_integer(location, &column_str,
-                                            init->column, 2);
+                                            req->column, 2);
             }
         }
     }
 
-    return ngx_http_conf_stringify(mp, value, &init->response);
+    return ngx_http_conf_stringify(mp, value, &req->response);
 }
 
 
@@ -527,21 +524,21 @@ ngx_http_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
 
 
 static ngx_int_t
-ngx_http_conf_store(ngx_http_conf_init_t *init)
+ngx_http_conf_store(nxt_http_request_t *req)
 {
     ssize_t    n;
 
-    if (init->file->fd == NXT_FILE_INVALID) {
+    if (req->file->fd == NXT_FILE_INVALID) {
         return NGX_OK;
     }
 
-    if (ftruncate(init->file->fd, 0) == -1) {
+    if (ftruncate(req->file->fd, 0) == -1) {
         return NGX_ERROR;
     }
 
-    n = nxt_file_write(init->file, init->json.start, init->json.length, 0);
+    n = nxt_file_write(req->file, req->json.start, req->json.length, 0);
 
-    if (n != (ssize_t) init->json.length) {
+    if (n != (ssize_t) req->json.length) {
         return NGX_ERROR;
     }
 

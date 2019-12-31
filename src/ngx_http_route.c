@@ -4,15 +4,14 @@
  * Copyright (C) NGINX, Inc.
  */
 
-#include <nxt_main.h>
-#include <ngx_http_init.h>
-#include <ngx_http_route.h>
+#include <ngx_http_ctrl.h>
 
 
 typedef enum {
     NGX_HTTP_ROUTE_TABLE = 0,
     NGX_HTTP_ROUTE_STRING,
     NGX_HTTP_ROUTE_STRING_PTR,
+    NGX_HTTP_ROUTE_HOST,
     NGX_HTTP_ROUTE_HEADER,
     NGX_HTTP_ROUTE_ARGUMENT,
     NGX_HTTP_ROUTE_COOKIE,
@@ -124,19 +123,21 @@ static u_char *ngx_http_route_pattern_copy(nxt_mp_t *mp, nxt_str_t *test,
 static nxt_int_t ngx_http_route_action_create(nxt_mp_t *mp,
     nxt_conf_value_t *cv, ngx_http_route_match_t *match);
 
-static ngx_http_action_t *ngx_http_route_match(nxt_http_request_t *r,
+static ngx_http_action_t *ngx_http_route_match(ngx_http_request_t *r,
     ngx_http_route_match_t *match);
-static nxt_int_t ngx_http_route_table(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_table(ngx_http_request_t *r,
     ngx_http_route_table_t *table);
-static nxt_int_t ngx_http_route_ruleset(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_ruleset(ngx_http_request_t *r,
     ngx_http_route_ruleset_t *ruleset);
-static nxt_int_t ngx_http_route_rule(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_rule(ngx_http_request_t *r,
     ngx_http_route_rule_t *rule);
-static nxt_int_t ngx_http_route_header(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_headers(ngx_http_request_t *r,
     ngx_http_route_rule_t *rule);
-static nxt_int_t ngx_http_route_arguments(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_arguments(ngx_http_request_t *r,
     ngx_http_route_rule_t *rule);
-static nxt_int_t ngx_http_route_scheme(nxt_http_request_t *r,
+static nxt_int_t ngx_http_route_scheme(ngx_http_request_t *r,
+    ngx_http_route_rule_t *rule);
+static nxt_int_t ngx_http_route_host(ngx_http_request_t *r,
     ngx_http_route_rule_t *rule);
 static nxt_int_t ngx_http_route_test_rule(ngx_http_route_rule_t *rule,
     u_char *start, size_t length);
@@ -144,6 +145,12 @@ static nxt_int_t ngx_http_route_pattern(ngx_http_route_pattern_t *pattern,
     u_char *start, size_t length);
 static nxt_int_t ngx_http_route_memcmp(u_char *start, u_char *test,
     size_t length, nxt_bool_t case_sensitive);
+static nxt_array_t *ngx_http_arguments_parse(ngx_http_request_t *r);
+
+
+#define NGX_HTTP_FIELD_HASH_INIT        159406U
+#define ngx_http_field_hash_char(h, c)  (((h) << 4) + (h) + (c))
+#define ngx_http_field_hash_end(h)      (((h) >> 16) ^ (h))
 
 
 ngx_http_routes_t *
@@ -282,19 +289,6 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
         test++;
     }
 
-    if (mtcf.host != NULL) {
-        rule = ngx_http_route_rule_create(mp, mtcf.host, 1,
-                                          NGX_HTTP_ROUTE_PATTERN_LOWCASE);
-        if (rule == NULL) {
-            return NULL;
-        }
-
-        rule->u.offset = offsetof(nxt_http_request_t, host);
-        rule->object = NGX_HTTP_ROUTE_STRING;
-        test->rule = rule;
-        test++;
-    }
-
     if (mtcf.uri != NULL) {
         rule = ngx_http_route_rule_create(mp, mtcf.uri, 1,
                                           NGX_HTTP_ROUTE_PATTERN_NOCASE);
@@ -302,7 +296,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
             return NULL;
         }
 
-        rule->u.offset = offsetof(nxt_http_request_t, path);
+        rule->u.offset = offsetof(ngx_http_request_t, uri);
         rule->object = NGX_HTTP_ROUTE_STRING;
         test->rule = rule;
         test++;
@@ -315,8 +309,20 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
             return NULL;
         }
 
-        rule->u.offset = offsetof(nxt_http_request_t, method);
-        rule->object = NGX_HTTP_ROUTE_STRING_PTR;
+        rule->u.offset = offsetof(ngx_http_request_t, method_name);
+        rule->object = NGX_HTTP_ROUTE_STRING;
+        test->rule = rule;
+        test++;
+    }
+
+    if (mtcf.host != NULL) {
+        rule = ngx_http_route_rule_create(mp, mtcf.host, 1,
+                                          NGX_HTTP_ROUTE_PATTERN_LOWCASE);
+        if (rule == NULL) {
+            return NULL;
+        }
+
+        rule->object = NGX_HTTP_ROUTE_HOST;
         test->rule = rule;
         test++;
     }
@@ -913,7 +919,7 @@ ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
 
 
 ngx_http_action_t *
-ngx_http_route_action(nxt_http_request_t *r, ngx_http_routes_t *routes)
+ngx_http_route_action(ngx_http_request_t *r, ngx_http_routes_t *routes)
 {
     ngx_http_action_t       *action;
     ngx_http_route_match_t  **match, **end;
@@ -935,7 +941,7 @@ ngx_http_route_action(nxt_http_request_t *r, ngx_http_routes_t *routes)
 
 
 static ngx_http_action_t *
-ngx_http_route_match(nxt_http_request_t *r, ngx_http_route_match_t *match)
+ngx_http_route_match(ngx_http_request_t *r, ngx_http_route_match_t *match)
 {
     nxt_int_t              ret;
     ngx_http_route_test_t  *test, *end;
@@ -969,7 +975,7 @@ ngx_http_route_match(nxt_http_request_t *r, ngx_http_route_match_t *match)
 
 
 static nxt_int_t
-ngx_http_route_table(nxt_http_request_t *r, ngx_http_route_table_t *table)
+ngx_http_route_table(ngx_http_request_t *r, ngx_http_route_table_t *table)
 {
     nxt_int_t                 ret;
     ngx_http_route_ruleset_t  **ruleset, **end;
@@ -993,7 +999,7 @@ ngx_http_route_table(nxt_http_request_t *r, ngx_http_route_table_t *table)
 
 
 static nxt_int_t
-ngx_http_route_ruleset(nxt_http_request_t *r, ngx_http_route_ruleset_t *ruleset)
+ngx_http_route_ruleset(ngx_http_request_t *r, ngx_http_route_ruleset_t *ruleset)
 {
     nxt_int_t              ret;
     ngx_http_route_rule_t  **rule, **end;
@@ -1016,23 +1022,26 @@ ngx_http_route_ruleset(nxt_http_request_t *r, ngx_http_route_ruleset_t *ruleset)
 
 
 static nxt_int_t
-ngx_http_route_rule(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
+ngx_http_route_rule(ngx_http_request_t *r, ngx_http_route_rule_t *rule)
 {
-    void       *p, **pp;
-    u_char     *start;
-    size_t     length;
-    nxt_str_t  *s;
+    void                *p, **pp;
+    u_char              *start;
+    size_t               length;
+    nxt_str_t           *s;
 
     switch (rule->object) {
 
     case NGX_HTTP_ROUTE_HEADER:
-        return ngx_http_route_header(r, rule);
+        return ngx_http_route_headers(r, rule);
 
     case NGX_HTTP_ROUTE_ARGUMENT:
         return ngx_http_route_arguments(r, rule);
 
     case NGX_HTTP_ROUTE_SCHEME:
         return ngx_http_route_scheme(r, rule);
+
+    case NGX_HTTP_ROUTE_HOST:
+        return ngx_http_route_host(r, rule);
 
     default:
         break;
@@ -1061,43 +1070,73 @@ ngx_http_route_rule(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
 
 
 static nxt_int_t
-ngx_http_route_header(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
+ngx_http_route_headers(ngx_http_request_t *r, ngx_http_route_rule_t *rule)
 {
-    nxt_int_t         ret;
-    ngx_http_field_t  *f;
+    u_char               c;
+    uint32_t             hash;
+    nxt_int_t            ret;
+    ngx_str_t           *name, *value;
+    ngx_uint_t           i, j;
+    ngx_list_part_t     *part;
+    ngx_table_elt_t     *header;
 
     ret = 0;
+        
+    part = &r->headers_in.headers.part;
+    header = part->elts;
 
-    nxt_list_each(f, r->fields) {
+    for (i = 0; /* void */; i++) {
 
-        if (rule->u.name.hash != f->hash
-            || rule->u.name.length != f->name_length
-            || nxt_strncasecmp(rule->u.name.start, f->name, f->name_length)
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            header = part->elts;
+            i = 0;
+        }
+
+        name = &header[i].key;
+        value = &header[i].value;
+
+        hash = NGX_HTTP_FIELD_HASH_INIT;
+
+        for (j = 0; j < name->len; j++) {
+            c = name->data[j];
+            c = nxt_lowcase(c);
+            hash = ngx_http_field_hash_char(hash, c);
+        }
+
+        hash = ngx_http_field_hash_end(hash) & 0xFFFF;
+
+        if (rule->u.name.hash != hash
+            || rule->u.name.length != name->len
+            || nxt_strncasecmp(rule->u.name.start, name->data, name->len)
                != 0)
         {
             continue;
         }
 
-        ret = ngx_http_route_test_rule(rule, f->value, f->value_length);
+        ret = ngx_http_route_test_rule(rule, value->data, value->len);
 
         if (ret == 0) {
             return ret;
         }
-
-    } nxt_list_loop;
+    }
 
     return ret;
 }
 
 
 static nxt_int_t
-ngx_http_route_arguments(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
+ngx_http_route_arguments(ngx_http_request_t *r, ngx_http_route_rule_t *rule)
 {
     nxt_bool_t             ret;
     nxt_array_t            *arguments;
     ngx_http_name_value_t  *nv, *end;
 
-    if (r->args.start == NULL) {
+    if (r->args.data == NULL) {
         return 0;
     }
 
@@ -1131,9 +1170,37 @@ ngx_http_route_arguments(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
 
 
 static nxt_int_t
-ngx_http_route_scheme(nxt_http_request_t *r, ngx_http_route_rule_t *rule)
+ngx_http_route_scheme(ngx_http_request_t *r, ngx_http_route_rule_t *rule)
 {
-    return NXT_OK;
+    void        *ssl;
+    nxt_bool_t  tls, https;
+
+    ssl = NULL;
+
+#if (NGX_HTTP_SSL)
+    if (r->connection->ssl) {
+        ssl = r->connection->ssl;
+    }
+#endif
+
+    tls = (ssl != NULL);
+
+    https = (rule->pattern[0].length1 == nxt_length("https"));
+
+    return (tls == https);
+}
+
+
+static nxt_int_t
+ngx_http_route_host(ngx_http_request_t *r, ngx_http_route_rule_t *rule)
+{
+    u_char     *start;
+    size_t      length;
+
+    length = r->headers_in.server.len;
+    start = r->headers_in.server.data;
+
+    return ngx_http_route_test_rule(rule, start, length);
 }
 
 
@@ -1240,4 +1307,100 @@ ngx_http_route_memcmp(u_char *start, u_char *test, size_t test_length,
     }
 
     return (n == 0);
+}
+
+
+static ngx_http_name_value_t *
+ngx_http_argument(nxt_array_t *array, u_char *name, size_t name_length,
+    uint32_t hash, u_char *start, u_char *end)
+{
+    size_t                 length;
+    ngx_http_name_value_t  *nv;
+
+    nv = nxt_array_add(array);
+    if (nxt_slow_path(nv == NULL)) {
+        return NULL;
+    }
+
+    nv->hash = ngx_http_field_hash_end(hash) & 0xFFFF;
+
+    length = end - start;
+
+    if (name == NULL) {
+        name_length = length;
+        name = start;
+        length = 0;
+    }
+
+    nv->name_length = name_length;
+    nv->value_length = length;
+    nv->name = name;
+    nv->value = start;
+
+    return nv;
+}
+
+
+static nxt_array_t *
+ngx_http_arguments_parse(ngx_http_request_t *r)
+{
+    size_t                 name_length;
+    u_char                 c, *p, *start, *end, *name;
+    uint32_t               hash;
+    nxt_bool_t             valid;
+    nxt_array_t            *args;
+    ngx_http_ctrl_ctx_t    *ctx;
+    ngx_http_name_value_t  *nv;
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
+
+    args = nxt_array_create(ctx->mem_pool, 2, sizeof(ngx_http_name_value_t));
+    if (nxt_slow_path(args == NULL)) {
+        return NULL;
+    }
+
+    hash = NGX_HTTP_FIELD_HASH_INIT;
+    valid = 1;
+    name = NULL;
+    name_length = 0;
+
+    start = r->args.data;
+    end = start + r->args.len;
+
+    for (p = start; p < end; p++) {
+        c = *p;
+
+        if (c == '=') {
+            name_length = p - start;
+            name = start;
+            start = p + 1;
+            valid = (name_length != 0);
+
+        } else if (c == '&') {
+            if (valid) {
+                nv = ngx_http_argument(args, name, name_length, hash,
+                                       start, p);
+                if (nxt_slow_path(nv == NULL)) {
+                    return NULL;
+                }
+            }
+
+            hash = NGX_HTTP_FIELD_HASH_INIT;
+            valid = 1;
+            name = NULL;
+            start = p + 1;
+
+        } else if (name == NULL) {
+            hash = ngx_http_field_hash_char(hash, c);
+        }
+    }
+
+    if (valid) {
+        nv = ngx_http_argument(args, name, name_length, hash, start, p);
+        if (nxt_slow_path(nv == NULL)) {
+            return NULL;
+        }
+    }
+
+    return args;
 }

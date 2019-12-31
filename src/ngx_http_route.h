@@ -12,6 +12,15 @@ typedef struct ngx_http_routes_s    ngx_http_routes_t;
 
 
 typedef struct {
+    uint16_t                        hash;
+    uint16_t                        name_length;
+    uint32_t                        value_length;
+    u_char                          *name;
+    u_char                          *value;
+} ngx_http_name_value_t;
+
+
+typedef struct {
     uint32_t                        items;
     ngx_http_name_value_t           *variable[0];
 } ngx_http_action_variables_t;
@@ -39,7 +48,7 @@ typedef struct {
 
 ngx_http_routes_t *ngx_http_routes_create(nxt_mp_t *mp,
     nxt_conf_value_t *routes_conf);
-ngx_http_action_t *ngx_http_route_action(nxt_http_request_t *r,
+ngx_http_action_t *ngx_http_route_action(ngx_http_request_t *r,
     ngx_http_routes_t *routes);
 
 

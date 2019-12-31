@@ -12,7 +12,6 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include <nxt_main.h>
-#include <ngx_http_init.h>
 #include <ngx_http_route.h>
 #include <ngx_http_conf.h>
 
@@ -40,7 +39,7 @@ typedef struct {
 typedef struct {
     nxt_mp_t                   *mem_pool;
 
-    nxt_http_request_t         *req;
+    ngx_http_request_t         *req;
     ngx_http_action_t          *action;
     ngx_http_conf_t            *http_conf;
 } ngx_http_ctrl_ctx_t;
