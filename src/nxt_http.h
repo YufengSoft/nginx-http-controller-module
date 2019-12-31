@@ -11,10 +11,11 @@
 typedef struct {
     nxt_mp_t                        *mem_pool;
 
+    nxt_str_t                       method;
     nxt_str_t                       host;
     nxt_str_t                       path;
-    nxt_str_t                       method;
     nxt_str_t                       args;
+    nxt_str_t                       body;
 
     nxt_array_t                     *arguments;  /* of nxt_http_name_value_t */
     nxt_list_t                      *fields;     /* of nxt_http_field_t */

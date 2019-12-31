@@ -267,9 +267,9 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
     ngx_slab_pool_t              *shpool;
-    nxt_conf_request_t            req;
-    nxt_conf_response_t           resp;
+    nxt_http_request_t            req;
     ngx_http_ctrl_ctx_t          *ctx;
+    nxt_http_conf_init_t          init;
     ngx_http_ctrl_conf_t         *conf;
     ngx_http_ctrl_shctx_t        *shctx;
     ngx_http_ctrl_main_conf_t    *cmcf;
@@ -288,19 +288,20 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
     switch (r->method) {
 
     case NGX_HTTP_GET:
-        ngx_memzero(&req, sizeof(nxt_conf_request_t));
+        ngx_memzero(&req, sizeof(nxt_http_request_t));
+        nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "GET");
         req.path.start = r->uri.data;
         req.path.length = r->uri.len;;
 
-        rc = nxt_http_conf_handle(&req, &resp);
+        rc = nxt_http_conf_handle(&req, &init);
         if (rc != NXT_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        return ngx_http_ctrl_response(r, resp.status, &resp.response);
+        return ngx_http_ctrl_response(r, init.status, &init.response);
 
     case NGX_HTTP_PUT:
 
@@ -332,28 +333,29 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
         ngx_shmtx_unlock(&shpool->mutex);
 
-        ngx_memzero(&req, sizeof(nxt_conf_request_t));
+        ngx_memzero(&req, sizeof(nxt_http_request_t));
+        nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "DELETE");
         req.path.start = r->uri.data;
         req.path.length = r->uri.len;;
 
-        req.file = &cmcf->file;
+        init.file = &cmcf->file;
 
-        rc = nxt_http_conf_handle(&req, &resp);
+        rc = nxt_http_conf_handle(&req, &init);
         if (rc != NXT_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        if (resp.status == 200) {
-            rc = ngx_http_ctrl_notify(r, &resp.json);
+        if (init.status == 200) {
+            rc = ngx_http_ctrl_notify(r, &init.json);
             if (rc != NGX_OK) {
                 return NGX_HTTP_INTERNAL_SERVER_ERROR;
             }
         }
 
-        return ngx_http_ctrl_response(r, resp.status, &resp.response);
+        return ngx_http_ctrl_response(r, init.status, &init.response);
 
     default:
         return NGX_HTTP_NOT_ALLOWED;
@@ -451,9 +453,9 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
     ngx_str_t                     body;
-    nxt_conf_request_t            req;
-    nxt_conf_response_t           resp;
+    nxt_http_request_t            req;
     ngx_http_ctrl_ctx_t          *ctx;
+    nxt_http_conf_init_t          init;
     ngx_http_ctrl_main_conf_t    *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
@@ -472,7 +474,8 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
 
-    ngx_memzero(&req, sizeof(nxt_conf_request_t));
+    ngx_memzero(&req, sizeof(nxt_http_request_t));
+    nxt_memzero(&init, sizeof(nxt_http_conf_init_t));
 
     req.mem_pool = ctx->mem_pool;
     nxt_str_set(&req.method, "PUT");
@@ -482,23 +485,23 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
     req.body.start = body.data;
     req.body.length = body.len;
 
-    req.file = &cmcf->file;
+    init.file = &cmcf->file;
 
-    rc = nxt_http_conf_handle(&req, &resp);
+    rc = nxt_http_conf_handle(&req, &init);
     if (rc != NXT_OK) {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
 
-    if (resp.status == 200) {
-        rc = ngx_http_ctrl_notify(r, &resp.json);
+    if (init.status == 200) {
+        rc = ngx_http_ctrl_notify(r, &init.json);
         if (rc != NGX_OK) {
             ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
             return;
         }
     }
 
-    rc = ngx_http_ctrl_response(r, resp.status, &resp.response);
+    rc = ngx_http_ctrl_response(r, init.status, &init.response);
 
     ngx_http_finalize_request(r, rc);
 }
