@@ -36,7 +36,7 @@
 #include <nxt_http.h>
 #include <nxt_http_addr.h>
 #include <nxt_http_route.h>
-#include <nxt_process.h>
+#include <nxt_http_conf.h>
 
 
 #endif /* _NXT_LIB_H_INCLUDED_ */

@@ -203,8 +203,8 @@ ngx_http_ctrl_cleanup(void *data)
 {
     ngx_http_ctrl_ctx_t *ctx = data;
 
-    if (ctx->process_conf) {
-        nxt_process_conf_release(ctx->process_conf);
+    if (ctx->http_conf) {
+        nxt_http_conf_release(ctx->http_conf);
     }
 
     nxt_mp_destroy(ctx->mem_pool);
@@ -325,9 +325,9 @@ ngx_http_ctrl_init_module(ngx_cycle_t *cycle)
 
     cmcf->file.name = cmcf->state.data;
 
-    if (nxt_process_start(&cmcf->file) != NXT_OK) {
+    if (nxt_http_conf_start(&cmcf->file) != NXT_OK) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
-                      "process start failed.");
+                      "http conf start failed.");
         return NGX_ERROR;
     }
 

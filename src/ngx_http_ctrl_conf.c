@@ -104,7 +104,7 @@ ngx_http_ctrl_request_init(ngx_http_request_t *r)
     nxt_memcpy(&req->remote->u.sockaddr, r->connection->sockaddr,
                sizeof(ngx_sockaddr_t));
 
-    action = nxt_process_http_action(req, &ctx->process_conf);
+    action = nxt_http_conf_action(req, &ctx->http_conf);
     if (action == NXT_HTTP_ACTION_ERROR) {
         return NGX_ERROR;
     }
@@ -267,11 +267,11 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
     ngx_slab_pool_t              *shpool;
+    nxt_conf_request_t            req;
+    nxt_conf_response_t           resp;
     ngx_http_ctrl_ctx_t          *ctx;
     ngx_http_ctrl_conf_t         *conf;
     ngx_http_ctrl_shctx_t        *shctx;
-    nxt_process_request_t         req;
-    nxt_process_response_t        resp;
     ngx_http_ctrl_main_conf_t    *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
@@ -288,14 +288,14 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
     switch (r->method) {
 
     case NGX_HTTP_GET:
-        ngx_memzero(&req, sizeof(nxt_process_request_t));
+        ngx_memzero(&req, sizeof(nxt_conf_request_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "GET");
         req.path.start = r->uri.data;
         req.path.length = r->uri.len;;
 
-        rc = nxt_process_config_handle(&req, &resp);
+        rc = nxt_http_conf_handle(&req, &resp);
         if (rc != NXT_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
@@ -332,7 +332,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
         ngx_shmtx_unlock(&shpool->mutex);
 
-        ngx_memzero(&req, sizeof(nxt_process_request_t));
+        ngx_memzero(&req, sizeof(nxt_conf_request_t));
 
         req.mem_pool = ctx->mem_pool;
         nxt_str_set(&req.method, "DELETE");
@@ -341,7 +341,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
         req.file = &cmcf->file;
 
-        rc = nxt_process_config_handle(&req, &resp);
+        rc = nxt_http_conf_handle(&req, &resp);
         if (rc != NXT_OK) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
@@ -451,9 +451,9 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
     ngx_str_t                     body;
+    nxt_conf_request_t            req;
+    nxt_conf_response_t           resp;
     ngx_http_ctrl_ctx_t          *ctx;
-    nxt_process_request_t         req;
-    nxt_process_response_t        resp;
     ngx_http_ctrl_main_conf_t    *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
@@ -472,7 +472,7 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
 
-    ngx_memzero(&req, sizeof(nxt_process_request_t));
+    ngx_memzero(&req, sizeof(nxt_conf_request_t));
 
     req.mem_pool = ctx->mem_pool;
     nxt_str_set(&req.method, "PUT");
@@ -484,7 +484,7 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
 
     req.file = &cmcf->file;
 
-    rc = nxt_process_config_handle(&req, &resp);
+    rc = nxt_http_conf_handle(&req, &resp);
     if (rc != NXT_OK) {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
@@ -731,7 +731,7 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
         return;
     }
 
-    ret = nxt_process_conf_apply(mp, value);
+    ret = nxt_http_conf_apply(mp, value);
     if (nxt_slow_path(ret != NXT_OK)) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                       "router conf apply failed.");

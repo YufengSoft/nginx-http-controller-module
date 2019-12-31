@@ -39,7 +39,7 @@ typedef struct {
 
     nxt_http_request_t         *req;
     nxt_http_action_t          *action;
-    nxt_process_conf_t         *process_conf;
+    nxt_http_conf_t            *http_conf;
 } ngx_http_ctrl_ctx_t;
 
 
