@@ -228,7 +228,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        return ngx_http_ctrl_response(r, req.status, &req.response);
+        return ngx_http_ctrl_response(r, req.status, &req.resp);
 
     case NGX_HTTP_PUT:
 
@@ -277,7 +277,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
             }
         }
 
-        return ngx_http_ctrl_response(r, req.status, &req.response);
+        return ngx_http_ctrl_response(r, req.status, &req.resp);
 
     default:
         return NGX_HTTP_NOT_ALLOWED;
@@ -416,7 +416,7 @@ ngx_http_ctrl_read_handler(ngx_http_request_t *r)
         }
     }
 
-    rc = ngx_http_ctrl_response(r, req.status, &req.response);
+    rc = ngx_http_ctrl_response(r, req.status, &req.resp);
 
     ngx_http_finalize_request(r, rc);
 }

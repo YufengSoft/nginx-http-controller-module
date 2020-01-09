@@ -30,7 +30,7 @@ typedef struct {
     nxt_uint_t                      column;
 
     nxt_str_t                       json;
-    nxt_str_t                       response;
+    nxt_str_t                       resp;
 
     nxt_file_t                      *file;
 } nxt_http_request_t;

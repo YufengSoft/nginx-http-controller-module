@@ -8,7 +8,7 @@
 
 
 static nxt_conf_value_t *ngx_http_conf_read(nxt_mp_t *mp, nxt_file_t *file);
-static ngx_int_t ngx_http_response_init(nxt_http_request_t *req);
+static ngx_int_t ngx_http_conf_response(nxt_http_request_t *req);
 static ngx_int_t ngx_http_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
     nxt_str_t *str);
 static ngx_int_t ngx_http_conf_store(nxt_http_request_t *req);
@@ -229,7 +229,7 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
         req->status = 200;
         req->conf = value;
 
-        return ngx_http_response_init(req);
+        return ngx_http_conf_response(req);
     }
 
     if (r->method == NGX_HTTP_PUT) {
@@ -260,7 +260,7 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
             nxt_conf_json_position(req->body.start, error.pos,
                                    &req->line, &req->column);
 
-            return ngx_http_response_init(req);
+            return ngx_http_conf_response(req);
         }
 
         if (path.length != 1) {
@@ -376,7 +376,7 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
     req->title = (u_char *) "Method isn't allowed.";
     req->offset = -1;
 
-    return ngx_http_response_init(req);
+    return ngx_http_conf_response(req);
 
 not_found:
 
@@ -384,7 +384,7 @@ not_found:
     req->title = (u_char *) "Value doesn't exist.";
     req->offset = -1;
 
-    return ngx_http_response_init(req);
+    return ngx_http_conf_response(req);
 
 invalid_conf:
 
@@ -392,7 +392,7 @@ invalid_conf:
     req->title = (u_char *) "Invalid configuration.";
     req->offset = -1;
 
-    return ngx_http_response_init(req);
+    return ngx_http_conf_response(req);
 
 alloc_fail:
 
@@ -400,7 +400,7 @@ alloc_fail:
     req->title = (u_char *) "Memory allocation failed.";
     req->offset = -1;
 
-    return ngx_http_response_init(req);
+    return ngx_http_conf_response(req);
 
 conf_done:
 
@@ -415,11 +415,13 @@ conf_done:
 
         ret = ngx_http_conf_store(req);
         if (ret != NXT_OK) {
-            return ret;
-        }
+            req->status = 200;
+            req->title = (u_char *) "Reconfiguration done but storage failed.";
 
-        req->status = 200;
-        req->title = (u_char *) "Reconfiguration done.";
+        } else {
+            req->status = 200;
+            req->title = (u_char *) "Reconfiguration done.";
+        }
 
     } else {
         req->status = 500;
@@ -427,12 +429,12 @@ conf_done:
         req->offset = -1;
     }
 
-    return ngx_http_response_init(req);
+    return ngx_http_conf_response(req);
 }
 
 
 static ngx_int_t
-ngx_http_response_init(nxt_http_request_t *req)
+ngx_http_conf_response(nxt_http_request_t *req)
 {
     nxt_mp_t          *mp;
     nxt_str_t         str;
@@ -497,7 +499,7 @@ ngx_http_response_init(nxt_http_request_t *req)
         }
     }
 
-    return ngx_http_conf_stringify(mp, value, &req->response);
+    return ngx_http_conf_stringify(mp, value, &req->resp);
 }
 
 
