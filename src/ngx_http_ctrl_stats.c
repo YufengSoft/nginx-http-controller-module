@@ -17,18 +17,15 @@ void
 ngx_http_ctrl_stats_code(ngx_http_request_t *r)
 {
     ngx_uint_t                     status;
-    ngx_slab_pool_t               *shpool;
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
     ngx_http_ctrl_main_conf_t      *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
-
     shctx = cmcf->shm_zone->data;
-    stats = shctx->stats;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
+    stats = &shctx->sh->stats;
 
-    ngx_shmtx_lock(&shpool->mutex);
+    ngx_shmtx_lock(&shctx->shpool->mutex);
 
     status = r->headers_out.status;
 
@@ -50,7 +47,7 @@ ngx_http_ctrl_stats_code(ngx_http_request_t *r)
 
     stats->total++;
 
-    ngx_shmtx_unlock(&shpool->mutex);
+    ngx_shmtx_unlock(&shctx->shpool->mutex);
 }
 
 
@@ -185,7 +182,6 @@ ngx_http_ctrl_stats_stub(ngx_http_request_t *r, nxt_mp_t *mp)
 static nxt_conf_value_t *
 ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
 {
-    ngx_slab_pool_t               *shpool;
     nxt_conf_value_t              *value;
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
@@ -196,8 +192,7 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
 
     shctx = cmcf->shm_zone->data;
-    stats = shctx->stats;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
+    stats = &shctx->sh->stats;
 
     value = nxt_conf_create_object(mp, 6);
     if (nxt_slow_path(value == NULL)) {
@@ -211,7 +206,7 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     static nxt_str_t  xx5_str = nxt_string("n5xx");
     static nxt_str_t  total_str = nxt_string("total");
 
-    ngx_shmtx_lock(&shpool->mutex);
+    ngx_shmtx_lock(&shctx->shpool->mutex);
 
     nxt_conf_set_member_integer(value, &xx1_str, stats->n1xx, 0);
     nxt_conf_set_member_integer(value, &xx2_str, stats->n2xx, 1);
@@ -220,7 +215,7 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     nxt_conf_set_member_integer(value, &xx5_str, stats->n5xx, 4);
     nxt_conf_set_member_integer(value, &total_str, stats->total, 5);
 
-    ngx_shmtx_unlock(&shpool->mutex);
+    ngx_shmtx_unlock(&shctx->shpool->mutex);
 
     return value;
 }

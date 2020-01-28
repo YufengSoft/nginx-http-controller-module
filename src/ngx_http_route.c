@@ -692,6 +692,8 @@ typedef struct {
     nxt_conf_value_t               *blacklist;
     nxt_conf_value_t               *whitelist;
     nxt_conf_value_t               *add_headers;
+    nxt_conf_value_t               *limit_conn;
+    nxt_conf_value_t               *limit_req;
 } ngx_http_route_action_conf_t;
 
 
@@ -720,6 +722,54 @@ static nxt_conf_map_t  ngx_http_route_action_conf[] = {
         NXT_CONF_MAP_PTR,
         offsetof(ngx_http_route_action_conf_t, add_headers)
     },
+
+    {
+        nxt_string("limit_conn"),
+        NXT_CONF_MAP_PTR,
+        offsetof(ngx_http_route_action_conf_t, limit_conn)
+    },
+
+    {
+        nxt_string("limit_req"),
+        NXT_CONF_MAP_PTR,
+        offsetof(ngx_http_route_action_conf_t, limit_req)
+    },
+};
+
+
+static nxt_conf_map_t  ngx_http_route_action_limit_conn_conf[] = {
+    {
+        nxt_string("key"),
+        NXT_CONF_MAP_STR,
+        offsetof(ngx_http_action_limit_conn_t, key),
+    },
+
+    {
+        nxt_string("conn"),
+        NXT_CONF_MAP_INT32,
+        offsetof(ngx_http_action_limit_conn_t, conn),
+    },
+};
+
+
+static nxt_conf_map_t  ngx_http_route_action_limit_req_conf[] = {
+    {
+        nxt_string("key"),
+        NXT_CONF_MAP_STR,
+        offsetof(ngx_http_action_limit_req_t, key),
+    },
+
+    {
+        nxt_string("rate"),
+        NXT_CONF_MAP_INT32,
+        offsetof(ngx_http_action_limit_req_t, rate),
+    },
+
+    {
+        nxt_string("burst"),
+        NXT_CONF_MAP_INT32,
+        offsetof(ngx_http_action_limit_req_t, burst),
+    },
 };
 
 
@@ -736,11 +786,14 @@ ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
     nxt_conf_value_t               *headers_conf, *header_conf;
     nxt_conf_value_t               *variables_conf, *variable_conf;
     nxt_conf_value_t               *blacklist_conf, *whitelist_conf;
+    nxt_conf_value_t               *limit_conn_conf, *limit_req_conf;
     nxt_addr_pattern_t             *pattern;
     ngx_http_name_value_t          *nv;
     ngx_http_action_addr_t         *blacklist, *whitelist;
     ngx_http_action_headers_t      *headers;
     ngx_http_action_variables_t    *variables;
+    ngx_http_action_limit_req_t    *limit_req;
+    ngx_http_action_limit_conn_t   *limit_conn;
     ngx_http_route_action_conf_t   accf;
 
     static nxt_str_t  action_path = nxt_string("/action");
@@ -912,6 +965,46 @@ ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         }
 
         match->action.add_headers = headers;
+    }
+
+    limit_conn_conf = accf.limit_conn;
+
+    if (limit_conn_conf != NULL) {
+        limit_conn = nxt_mp_alloc(mp, sizeof(ngx_http_action_limit_conn_t));
+        if (nxt_slow_path(limit_conn == NULL)) {
+            return NXT_ERROR;
+        }
+
+        ret = nxt_conf_map_object(mp, limit_conn_conf,
+                                  ngx_http_route_action_limit_conn_conf,
+                                  nxt_nitems(ngx_http_route_action_limit_conn_conf),
+                                  limit_conn);
+        if (ret != NXT_OK) {
+            return ret;
+        }
+
+        match->action.limit_conn = limit_conn;
+    }
+
+    limit_req_conf = accf.limit_req;
+
+    if (limit_req_conf != NULL) {
+        limit_req = nxt_mp_alloc(mp, sizeof(ngx_http_action_limit_req_t));
+        if (nxt_slow_path(limit_req == NULL)) {
+            return NXT_ERROR;
+        }
+
+        ret = nxt_conf_map_object(mp, limit_req_conf,
+                                  ngx_http_route_action_limit_req_conf,
+                                  nxt_nitems(ngx_http_route_action_limit_req_conf),
+                                  limit_req);
+        if (ret != NXT_OK) {
+            return ret;
+        }
+
+        limit_req->rate *= 1000;
+
+        match->action.limit_req = limit_req;
     }
 
     return NXT_OK;

@@ -39,9 +39,11 @@ typedef struct {
 typedef struct {
     nxt_mp_t                   *mem_pool;
 
-    ngx_http_request_t         *req;
+    ngx_http_request_t         *request;
     ngx_http_action_t          *action;
     ngx_http_conf_t            *http_conf;
+
+    ngx_rbtree_node_t          *node;
 } ngx_http_ctrl_ctx_t;
 
 
@@ -62,9 +64,37 @@ typedef struct {
 
 
 typedef struct {
-    ngx_http_ctrl_conf_t       *conf;
-    ngx_http_ctrl_stats_t      *stats;
+    ngx_rbtree_t               limit_conn_rbtree;
+    ngx_rbtree_t               limit_req_rbtree;
+    ngx_queue_t                limit_req_queue;
+    ngx_http_ctrl_conf_t       conf;
+    ngx_http_ctrl_stats_t      stats;
+} ngx_http_ctrl_shdata_t;
+
+
+typedef struct {
+    ngx_http_ctrl_shdata_t     *sh;
+    ngx_slab_pool_t            *shpool;
 } ngx_http_ctrl_shctx_t;
+
+
+typedef struct {
+    u_char                     color;
+    u_char                     len;
+    u_short                    conn;
+    u_char                     data[1];
+} ngx_http_ctrl_limit_conn_node_t;
+
+
+typedef struct {
+    u_char                     color;
+    u_char                     len;
+    ngx_queue_t                queue;
+    ngx_msec_t                 last;
+    /* integer value, 1 corresponds to 0.001 r/s */
+    ngx_uint_t                 excess;
+    u_char                     data[1];
+} ngx_http_ctrl_limit_req_node_t;
 
 
 typedef enum {
@@ -80,6 +110,10 @@ typedef struct {
 
 ngx_http_ctrl_ctx_t *ngx_http_ctrl_get_ctx(ngx_http_request_t *r);
 ngx_int_t ngx_http_ctrl_request_init(ngx_http_request_t *r);
+ngx_int_t ngx_http_ctrl_limit_conn(ngx_http_request_t *r,
+    ngx_http_action_limit_conn_t *lc);
+ngx_int_t ngx_http_ctrl_limit_req(ngx_http_request_t *r,
+    ngx_http_action_limit_req_t *lr);
 ngx_int_t ngx_http_ctrl_set_variables(ngx_http_request_t *r,
     ngx_http_action_variables_t *variables);
 ngx_int_t ngx_http_ctrl_blacklist(ngx_http_request_t *r,
@@ -94,6 +128,11 @@ ngx_int_t ngx_http_ctrl_response(ngx_http_request_t *r,
 ngx_int_t ngx_http_ctrl_config_handler(ngx_http_request_t *r);
 void ngx_http_ctrl_notify_write_handler(ngx_event_t *rev);
 void ngx_http_ctrl_notify_read_handler(ngx_event_t *rev);
+
+void ngx_http_ctrl_limit_conn_rbtree_insert_value(ngx_rbtree_node_t *temp,
+    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
+void ngx_http_ctrl_limit_req_rbtree_insert_value(ngx_rbtree_node_t *temp,
+    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
 
 
 extern ngx_module_t  ngx_http_ctrl_module;

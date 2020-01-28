@@ -39,10 +39,25 @@ typedef struct {
 
 
 typedef struct {
+    nxt_str_t                       key;
+    nxt_uint_t                      conn;
+} ngx_http_action_limit_conn_t;
+
+
+typedef struct {
+    nxt_str_t                       key;
+    nxt_uint_t                      rate;
+    nxt_uint_t                      burst;
+} ngx_http_action_limit_req_t;
+
+
+typedef struct {
     ngx_http_action_variables_t     *variables;
     ngx_http_action_addr_t          *blacklist;
     ngx_http_action_addr_t          *whitelist;
     ngx_http_action_headers_t       *add_headers;
+    ngx_http_action_limit_conn_t    *limit_conn;
+    ngx_http_action_limit_req_t     *limit_req;
 } ngx_http_action_t;
 
 

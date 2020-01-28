@@ -118,6 +118,41 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_match_members[] = {
 };
 
 
+static nxt_conf_vldt_object_t  nxt_conf_vldt_limit_conn_members[] = {
+    { nxt_string("key"),
+      NXT_CONF_VLDT_STRING,
+      NULL,
+      NULL },
+
+    { nxt_string("conn"),
+      NXT_CONF_VLDT_INTEGER,
+      NULL,
+      NULL },
+
+    NXT_CONF_VLDT_END
+};
+
+
+static nxt_conf_vldt_object_t  nxt_conf_vldt_limit_req_members[] = {
+    { nxt_string("key"),
+      NXT_CONF_VLDT_STRING,
+      NULL,
+      NULL },
+
+    { nxt_string("rate"),
+      NXT_CONF_VLDT_INTEGER,
+      NULL,
+      NULL },
+
+    { nxt_string("burst"),
+      NXT_CONF_VLDT_INTEGER,
+      NULL,
+      NULL },
+
+    NXT_CONF_VLDT_END
+};
+
+
 static nxt_conf_vldt_object_t  nxt_conf_vldt_action_members[] = {
 
     { nxt_string("variables"),
@@ -139,6 +174,16 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_action_members[] = {
       NXT_CONF_VLDT_OBJECT,
       &nxt_conf_vldt_object_iterator,
       (void *) &nxt_conf_vldt_add_header },
+
+    { nxt_string("limit_conn"),
+      NXT_CONF_VLDT_OBJECT,
+      &nxt_conf_vldt_object,
+      (void *) &nxt_conf_vldt_limit_conn_members },
+
+    { nxt_string("limit_req"),
+      NXT_CONF_VLDT_OBJECT,
+      &nxt_conf_vldt_object,
+      (void *) &nxt_conf_vldt_limit_req_members },
 
     NXT_CONF_VLDT_END
 };

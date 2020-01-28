@@ -48,6 +48,7 @@ ngx_module_srcs="$ngx_addon_dir/src/nxt_malloc.c \
                  $ngx_addon_dir/src/ngx_http_conf.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_conf.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_stats.c \
+                 $ngx_addon_dir/src/ngx_http_ctrl_limit.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_module.c"
 
 ngx_module_libs="-lm"

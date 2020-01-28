@@ -198,18 +198,13 @@ ngx_int_t
 ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 {
     ngx_int_t                     rc;
-    ngx_slab_pool_t              *shpool;
     nxt_http_request_t            req;
     ngx_http_ctrl_ctx_t          *ctx;
-    ngx_http_ctrl_conf_t         *conf;
     ngx_http_ctrl_shctx_t        *shctx;
     ngx_http_ctrl_main_conf_t    *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
-
     shctx = cmcf->shm_zone->data;
-    conf = shctx->conf;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
     if (ctx == NULL) {
@@ -232,14 +227,14 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
     case NGX_HTTP_PUT:
 
-        ngx_shmtx_lock(&shpool->mutex);
+        ngx_shmtx_lock(&shctx->shpool->mutex);
 
-        if (conf->counter > 0) {
-            ngx_shmtx_unlock(&shpool->mutex);
+        if (shctx->sh->conf.counter > 0) {
+            ngx_shmtx_unlock(&shctx->shpool->mutex);
             return NGX_HTTP_NOT_ALLOWED;
         }
 
-        ngx_shmtx_unlock(&shpool->mutex);
+        ngx_shmtx_unlock(&shctx->shpool->mutex);
 
         rc = ngx_http_read_client_request_body(r, ngx_http_ctrl_read_handler);
 
@@ -251,14 +246,14 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
 
     case NGX_HTTP_DELETE:
 
-        ngx_shmtx_lock(&shpool->mutex);
+        ngx_shmtx_lock(&shctx->shpool->mutex);
 
-        if (conf->counter > 0) {
-            ngx_shmtx_unlock(&shpool->mutex);
+        if (shctx->sh->conf.counter > 0) {
+            ngx_shmtx_unlock(&shctx->shpool->mutex);
             return NGX_HTTP_NOT_ALLOWED;
         }
 
-        ngx_shmtx_unlock(&shpool->mutex);
+        ngx_shmtx_unlock(&shctx->shpool->mutex);
 
         nxt_memzero(&req, sizeof(nxt_http_request_t));
 
@@ -429,17 +424,14 @@ ngx_http_ctrl_notify(ngx_http_request_t *r, nxt_str_t *notify)
     ngx_uint_t                  i;
     ngx_chain_t                *cl;
     nxt_port_msg_t             *msg;
-    ngx_slab_pool_t            *shpool;
     ngx_connection_t           *c;
     ngx_http_ctrl_conf_t       *conf;
     ngx_http_ctrl_shctx_t      *shctx;
     ngx_http_ctrl_main_conf_t  *cmcf;
 
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
-
     shctx = cmcf->shm_zone->data;
-    conf = shctx->conf;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
+    conf = &shctx->sh->conf;
 
     b = ngx_alloc(sizeof(ngx_buf_t) + sizeof(nxt_port_msg_t),
                   r->connection->log);
@@ -458,17 +450,17 @@ ngx_http_ctrl_notify(ngx_http_request_t *r, nxt_str_t *notify)
     msg->size = b->last - b->pos;
     msg->type = NXT_PORT_MSG_CONF;
 
-    ngx_shmtx_lock(&shpool->mutex);
+    ngx_shmtx_lock(&shctx->shpool->mutex);
 
     if (conf->json.data != NULL) {
-        ngx_slab_free_locked(shpool, conf->json.data);
+        ngx_slab_free_locked(shctx->shpool, conf->json.data);
     }
 
     conf->json.len = notify->length;
-    conf->json.data = ngx_slab_alloc_locked(shpool, conf->json.len);
+    conf->json.data = ngx_slab_alloc_locked(shctx->shpool, conf->json.len);
 
     if (conf->json.data == NULL) {
-        ngx_shmtx_unlock(&shpool->mutex);
+        ngx_shmtx_unlock(&shctx->shpool->mutex);
 
         return NGX_ERROR;
     }
@@ -500,7 +492,7 @@ ngx_http_ctrl_notify(ngx_http_request_t *r, nxt_str_t *notify)
         }
     }
 
-    ngx_shmtx_unlock(&shpool->mutex);
+    ngx_shmtx_unlock(&shctx->shpool->mutex);
 
     return NGX_OK;
 }
@@ -513,8 +505,6 @@ ngx_http_ctrl_notify_write_handler(ngx_event_t *wev)
     ngx_buf_t                  *b;
     ngx_chain_t                *cl;
     ngx_connection_t           *c;
-    ngx_slab_pool_t            *shpool;
-    ngx_http_ctrl_conf_t       *conf;
     ngx_http_ctrl_shctx_t      *shctx;
     ngx_http_ctrl_main_conf_t  *cmcf;
 
@@ -528,10 +518,7 @@ ngx_http_ctrl_notify_write_handler(ngx_event_t *wev)
     }
 
     cmcf = ngx_http_cycle_get_module_main_conf(ngx_cycle, ngx_http_ctrl_module);
-
     shctx = cmcf->shm_zone->data;
-    conf = shctx->conf;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     cl = c->data;
     b = cl->buf;
@@ -547,7 +534,7 @@ ngx_http_ctrl_notify_write_handler(ngx_event_t *wev)
     case NGX_ERROR:
         ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, ngx_errno,
                       "http ctrl notify send failed");
-        ngx_http_ctrl_conf_release(shpool, conf);
+        ngx_http_ctrl_conf_release(shctx->shpool, &shctx->sh->conf);
         break;
 
     default:
@@ -578,10 +565,8 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
     ngx_buf_t                  *b;
     ngx_str_t                  *json;
     nxt_port_msg_t             *msg;
-    ngx_slab_pool_t            *shpool;
     ngx_connection_t           *c;
     nxt_conf_value_t           *value;
-    ngx_http_ctrl_conf_t       *conf;
     ngx_http_ctrl_shctx_t      *shctx;
     ngx_http_ctrl_main_conf_t  *cmcf;
 
@@ -593,8 +578,6 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
     b = cmcf->buf;
 
     shctx = cmcf->shm_zone->data;
-    conf = shctx->conf;
-    shpool = (ngx_slab_pool_t *) cmcf->shm_zone->shm.addr;
 
     n = c->recv(c, b->start, b->end - b->start);
 
@@ -623,22 +606,22 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
         goto fail;
     }
 
-    ngx_shmtx_lock(&shpool->mutex);
+    ngx_shmtx_lock(&shctx->shpool->mutex);
 
-    json = &conf->json;
+    json = &shctx->sh->conf.json;
 
     start = nxt_mp_nget(mp, json->len);
     if (nxt_slow_path(start == NULL)) {
-        ngx_shmtx_unlock(&shpool->mutex);
+        ngx_shmtx_unlock(&shctx->shpool->mutex);
         nxt_mp_destroy(mp);
         goto fail;
     }
 
     end = nxt_cpymem(start, json->data, json->len);
 
-    ngx_http_ctrl_conf_locked_release(shpool, conf);
+    ngx_http_ctrl_conf_locked_release(shctx->shpool, &shctx->sh->conf);
 
-    ngx_shmtx_unlock(&shpool->mutex);
+    ngx_shmtx_unlock(&shctx->shpool->mutex);
 
     value = nxt_conf_json_parse(mp, start, end, NULL);
 
@@ -663,7 +646,7 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
 
 fail:
 
-    ngx_http_ctrl_conf_release(shpool, conf);
+    ngx_http_ctrl_conf_release(shctx->shpool, &shctx->sh->conf);
 
     (void) ngx_handle_read_event(rev, 0);
 }

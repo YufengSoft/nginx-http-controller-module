@@ -179,6 +179,7 @@ ngx_http_ctrl_get_ctx(ngx_http_request_t *r)
     ngx_http_set_ctx(r, ctx, ngx_http_ctrl_module);
 
     ctx->mem_pool = mp;
+    ctx->request = r;
 
     cln = ngx_pool_cleanup_add(r->pool, 0);
     if (cln == NULL) {
@@ -203,11 +204,70 @@ ngx_http_ctrl_cleanup(void *data)
 {
     ngx_http_ctrl_ctx_t *ctx = data;
 
+    ngx_rbtree_node_t                *node;
+    ngx_http_ctrl_shctx_t            *shctx;
+    ngx_http_ctrl_main_conf_t        *cmcf;
+    ngx_http_ctrl_limit_conn_node_t  *cn;
+
     if (ctx->http_conf) {
         ngx_http_conf_release(ctx->http_conf);
     }
 
+    if (ctx->node) {
+        node = ctx->node;
+        cn = (ngx_http_ctrl_limit_conn_node_t *) &node->color;
+
+        cmcf = ngx_http_get_module_main_conf(ctx->request, ngx_http_ctrl_module);
+        shctx = cmcf->shm_zone->data;
+
+        ngx_shmtx_lock(&shctx->shpool->mutex);
+
+        cn->conn--;
+
+        if (cn->conn == 0) {
+            ngx_rbtree_delete(&shctx->sh->limit_conn_rbtree, node);
+            ngx_slab_free_locked(shctx->shpool, node);
+        }
+
+        ngx_shmtx_unlock(&shctx->shpool->mutex);
+    }
+
     nxt_mp_destroy(ctx->mem_pool);
+}
+
+
+static ngx_int_t
+ngx_http_ctrl_preaccess_handler(ngx_http_request_t *r)
+{
+    ngx_int_t                   rc;
+    ngx_http_ctrl_ctx_t        *ctx;
+    ngx_http_ctrl_loc_conf_t   *clcf;
+
+    ctx = ngx_http_ctrl_get_ctx(r);
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
+
+    if (ctx == NULL || ctx->action == NULL) {
+        return NGX_DECLINED;
+    }
+
+    if (clcf->conf_enable) {
+
+        if (ctx->action->limit_conn) {
+            rc = ngx_http_ctrl_limit_conn(r, ctx->action->limit_conn);
+            if (rc != NGX_DECLINED) {
+                return rc;
+            }
+        }
+
+        if (ctx->action->limit_req) {
+            rc = ngx_http_ctrl_limit_req(r, ctx->action->limit_req);
+            if (rc != NGX_DECLINED) {
+                return rc;
+            }
+        }
+    }
+
+    return NGX_DECLINED;
 }
 
 
@@ -637,48 +697,59 @@ ngx_http_ctrl_init_zone(ngx_shm_zone_t *shm_zone, void *data)
     ngx_http_ctrl_shctx_t  *octx = data;
 
     size_t                  len;
-    u_char                 *p;
-    ngx_slab_pool_t        *shpool;
+    ngx_rbtree_node_t      *sentinel;
     ngx_http_ctrl_shctx_t  *ctx;
 
     ctx = shm_zone->data;
 
     if (octx) {
-        ctx->conf = octx->conf;
-        ctx->stats = octx->stats;
+        ctx->sh = octx->sh;
+        ctx->shpool = octx->shpool;
 
         return NGX_OK;
     }
 
-    shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
+    ctx->shpool = (ngx_slab_pool_t *) shm_zone->shm.addr;
 
     if (shm_zone->shm.exists) {
-        ctx->conf = shpool->data;
-        ctx->stats = (ngx_http_ctrl_stats_t *)
-                        ((u_char *) ctx->conf + sizeof(ngx_http_ctrl_conf_t));
+        ctx->sh = ctx->shpool->data;
 
         return NGX_OK;
     }
 
-    p = ngx_slab_calloc(shpool, sizeof(ngx_http_ctrl_conf_t)
-                                + sizeof(ngx_http_ctrl_stats_t));
-    if (p == NULL) {
+    ctx->sh = ngx_slab_calloc(ctx->shpool, sizeof(ngx_http_ctrl_shdata_t));
+    if (ctx->sh == NULL) {
         return NGX_ERROR;
     }
 
-    shpool->data = p;
+    ctx->shpool->data = ctx->sh;
 
-    ctx->conf = (ngx_http_ctrl_conf_t *) p;
-    ctx->stats = (ngx_http_ctrl_stats_t *) (p + sizeof(ngx_http_ctrl_conf_t));
+    sentinel = ngx_slab_alloc(ctx->shpool, sizeof(ngx_rbtree_node_t));
+    if (sentinel == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_rbtree_init(&ctx->sh->limit_conn_rbtree, sentinel,
+                    ngx_http_ctrl_limit_conn_rbtree_insert_value);
+
+    sentinel = ngx_slab_alloc(ctx->shpool, sizeof(ngx_rbtree_node_t));
+    if (sentinel == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_rbtree_init(&ctx->sh->limit_req_rbtree, sentinel,
+                    ngx_http_ctrl_limit_req_rbtree_insert_value);
+
+    ngx_queue_init(&ctx->sh->limit_req_queue);
 
     len = sizeof(" in ctrl_zone \"\"") + shm_zone->shm.name.len;
 
-    shpool->log_ctx = ngx_slab_alloc(shpool, len);
-    if (shpool->log_ctx == NULL) {
+    ctx->shpool->log_ctx = ngx_slab_alloc(ctx->shpool, len);
+    if (ctx->shpool->log_ctx == NULL) {
         return NGX_ERROR;
     }
 
-    ngx_sprintf(shpool->log_ctx, " in ctrl_zone \"%V\"%Z",
+    ngx_sprintf(ctx->shpool->log_ctx, " in ctrl_zone \"%V\"%Z",
                 &shm_zone->shm.name);
 
     return NGX_OK;
@@ -873,6 +944,13 @@ ngx_http_ctrl_init(ngx_conf_t *cf)
     }
 
     *h = ngx_http_ctrl_rewrite_handler;    
+
+    h = ngx_array_push(&cmcf->phases[NGX_HTTP_PREACCESS_PHASE].handlers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_ctrl_preaccess_handler;
 
     h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
     if (h == NULL) {
