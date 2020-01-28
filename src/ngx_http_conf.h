@@ -36,7 +36,7 @@ typedef struct {
 } nxt_http_request_t;
 
 
-ngx_int_t ngx_http_conf_start(nxt_file_t *file);
+ngx_int_t ngx_http_conf_start(nxt_file_t *file, nxt_str_t *error);
 ngx_int_t ngx_http_conf_apply(nxt_mp_t *mp, nxt_conf_value_t *conf);
 ngx_http_action_t *ngx_http_conf_action(ngx_http_request_t *r,
     ngx_http_conf_t **http_conf);

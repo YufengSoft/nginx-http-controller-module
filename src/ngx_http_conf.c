@@ -7,7 +7,8 @@
 #include <ngx_http_ctrl.h>
 
 
-static nxt_conf_value_t *ngx_http_conf_read(nxt_mp_t *mp, nxt_file_t *file);
+static nxt_conf_value_t *ngx_http_conf_get(nxt_mp_t *mp, nxt_file_t *file,
+    nxt_str_t *error);
 static ngx_int_t ngx_http_conf_response(nxt_http_request_t *req);
 static ngx_int_t ngx_http_conf_stringify(nxt_mp_t *mp, nxt_conf_value_t *value,
     nxt_str_t *str);
@@ -18,7 +19,7 @@ static ngx_http_conf_t  *ngx_http_conf;
 
 
 ngx_int_t
-ngx_http_conf_start(nxt_file_t *file)
+ngx_http_conf_start(nxt_file_t *file, nxt_str_t *error)
 {
     nxt_mp_t          *mp;
     nxt_conf_value_t  *conf;
@@ -28,7 +29,7 @@ ngx_http_conf_start(nxt_file_t *file)
         return NGX_ERROR;
     }
 
-    conf = ngx_http_conf_read(mp, file);
+    conf = ngx_http_conf_get(mp, file, error);
     if (nxt_slow_path(conf == NULL)) {
         goto fail;
     }
@@ -48,7 +49,7 @@ fail:
 
 
 static nxt_conf_value_t *
-ngx_http_conf_read(nxt_mp_t *mp, nxt_file_t *file)
+ngx_http_conf_get(nxt_mp_t *mp, nxt_file_t *file, nxt_str_t *error)
 {
     size_t                 size;
     u_char                 *start;
@@ -99,15 +100,28 @@ ngx_http_conf_read(nxt_mp_t *mp, nxt_file_t *file)
 
                     ret = nxt_conf_validate(&vldt);
 
-                    nxt_mp_destroy(vldt.pool);
+                    if (nxt_slow_path(ret == NXT_DECLINED)) {
+                        error->length = vldt.error.length;
+                        error->start = nxt_mp_alloc(mp, error->length);
 
-                    if (nxt_slow_path(ret == NXT_ERROR)) {
-                        return NULL;
+                        if (nxt_slow_path(error->start == NULL)) {
+                            return NULL;
+                        }
+
+                        nxt_memcpy(error->start, vldt.error.start, error->length);
+
+                        goto invalid;
                     }
+
+                    nxt_mp_destroy(vldt.pool);
 
                     if (nxt_fast_path(ret == NXT_OK)) {
                         return value;
                     }
+
+                    /* NXT_ERROR */
+
+                    return NULL;
                 }
             }
 

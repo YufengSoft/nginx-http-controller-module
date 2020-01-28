@@ -185,6 +185,11 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_action_members[] = {
       &nxt_conf_vldt_object,
       (void *) &nxt_conf_vldt_limit_req_members },
 
+    { nxt_string("limit_rate"),
+      NXT_CONF_VLDT_INTEGER,
+      NULL,
+      NULL },
+
     NXT_CONF_VLDT_END
 };
 

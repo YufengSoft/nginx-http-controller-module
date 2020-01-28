@@ -252,6 +252,11 @@ ngx_http_ctrl_preaccess_handler(ngx_http_request_t *r)
 
     if (clcf->conf_enable) {
 
+        if (ctx->action->limit_rate > 0) {
+            r->limit_rate = ctx->action->limit_rate;
+            r->limit_rate_set = 1;
+        }
+
         if (ctx->action->limit_conn) {
             rc = ngx_http_ctrl_limit_conn(r, ctx->action->limit_conn);
             if (rc != NGX_DECLINED) {
@@ -371,6 +376,8 @@ ngx_http_ctrl_init_module(ngx_cycle_t *cycle)
     int                         value;
     size_t                      buffer_size;
     socklen_t                   olen;
+    nxt_str_t                   error;
+    ngx_str_t                   log;
     ngx_uint_t                  n, nfd;
     ngx_socket_t               *fd, fds[2];
     ngx_core_conf_t            *ccf;
@@ -385,10 +392,19 @@ ngx_http_ctrl_init_module(ngx_cycle_t *cycle)
 
     cmcf->file.name = cmcf->state.data;
 
-    if (ngx_http_conf_start(&cmcf->file) != NGX_OK) {
+    nxt_memzero(&error, sizeof(nxt_str_t));
+
+    if (ngx_http_conf_start(&cmcf->file, &error) != NGX_OK) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                       "http conf start failed.");
         return NGX_ERROR;
+    }
+
+    if (error.length > 0) {
+        log.len = error.length;
+        log.data = error.start;
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
+                      "invalid http conf start: %V", &log);
     }
 
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
