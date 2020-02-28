@@ -936,9 +936,15 @@ ngx_http_ctrl_config(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static char *
 ngx_http_ctrl_stats_display(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_core_loc_conf_t  *clcf;
+    ngx_http_core_loc_conf_t   *clcf;
+	ngx_http_ctrl_main_conf_t  *cmcf;
 
     clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
+    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_ctrl_module);
+
+    if (cmcf->shm_zone == NULL) {
+        return "require \"ctrl_zone\"";
+    }
 
     clcf->handler = ngx_http_ctrl_stats_handler;
 
