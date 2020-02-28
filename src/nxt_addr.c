@@ -316,6 +316,7 @@ nxt_addr_pattern_match(nxt_addr_pattern_t *p, nxt_sockaddr_t *sa)
                                 sizeof(struct in_addr)) >= 0
                      && nxt_memcmp(&sin->sin_addr, &p->addr.v4.end,
                                    sizeof(struct in_addr)) <= 0);
+			break;
 
         case NXT_ADDR_CIDR:
             match = ((sin->sin_addr.s_addr & p->addr.v4.end)

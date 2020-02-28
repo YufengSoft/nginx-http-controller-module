@@ -185,10 +185,8 @@ ngx_http_ctrl_stats_status(ngx_http_request_t *r, nxt_mp_t *mp)
     nxt_conf_value_t              *value;
     ngx_http_ctrl_stats_t         *stats;
     ngx_http_ctrl_shctx_t         *shctx;
-    ngx_http_ctrl_loc_conf_t      *clcf;
     ngx_http_ctrl_main_conf_t     *cmcf;
 
-    clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
 
     shctx = cmcf->shm_zone->data;

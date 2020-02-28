@@ -129,11 +129,9 @@ ngx_http_ctrl_limit_req(ngx_http_request_t *r, ngx_http_action_limit_req_t *lr)
     ngx_str_t                   key;
     nxt_uint_t                  delay;
     ngx_uint_t                  excess;
-    ngx_http_ctrl_ctx_t        *ctx;
     ngx_http_ctrl_shctx_t      *shctx;
     ngx_http_ctrl_main_conf_t  *cmcf;
 
-    ctx = ngx_http_get_module_ctx(r, ngx_http_ctrl_module);
     cmcf = ngx_http_get_module_main_conf(r, ngx_http_ctrl_module);
     shctx = cmcf->shm_zone->data;
 
