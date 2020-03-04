@@ -49,6 +49,9 @@ static nxt_int_t nxt_conf_vldt_object_iterator(nxt_conf_validation_t *vldt,
 static nxt_int_t nxt_conf_vldt_array_iterator(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value, void *data);
 
+static nxt_int_t nxt_conf_vldt_action(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+
 static nxt_int_t nxt_conf_vldt_route(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value);
 static nxt_int_t nxt_conf_vldt_match_patterns(nxt_conf_validation_t *vldt,
@@ -190,6 +193,21 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_action_members[] = {
       NULL,
       NULL },
 
+    { nxt_string("return"),
+      NXT_CONF_VLDT_INTEGER,
+      NULL,
+      NULL },
+
+    { nxt_string("text"),
+      NXT_CONF_VLDT_STRING,
+      NULL,
+      NULL },
+
+    { nxt_string("location"),
+      NXT_CONF_VLDT_STRING,
+      NULL,
+      NULL },
+
     NXT_CONF_VLDT_END
 };
 
@@ -202,8 +220,8 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_route_members[] = {
 
     { nxt_string("action"),
       NXT_CONF_VLDT_OBJECT,
-      &nxt_conf_vldt_object,
-      (void *) &nxt_conf_vldt_action_members },
+      &nxt_conf_vldt_action,
+      NULL },
 
     NXT_CONF_VLDT_END
 };
@@ -443,6 +461,63 @@ nxt_conf_vldt_array_iterator(nxt_conf_validation_t *vldt,
             return ret;
         }
     }
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_action(nxt_conf_validation_t *vldt, nxt_conf_value_t *value,
+    void *data)
+{
+    nxt_int_t         ret;
+    nxt_uint_t        status;
+    nxt_conf_value_t  *return_value, *text_value, *location_value;
+
+    static nxt_str_t  return_str = nxt_string("return");
+    static nxt_str_t  text_str = nxt_string("text");
+    static nxt_str_t  location_str = nxt_string("location");
+
+    ret = nxt_conf_vldt_object(vldt, value, nxt_conf_vldt_action_members);
+    if (nxt_slow_path(ret != NXT_OK)) {
+        return ret;
+    }
+
+    return_value = nxt_conf_get_object_member(value, &return_str, NULL);
+    
+    if (return_value == NULL) {
+        return NXT_OK;
+    }
+
+    status = nxt_conf_get_integer(return_value);
+
+    if (status < 100 || status > 599) {
+        return nxt_conf_vldt_error(vldt, "The \"return\" number must be "
+                                   "between 100 and 600.");
+    }
+
+    text_value = nxt_conf_get_object_member(value, &text_str, NULL);
+    location_value = nxt_conf_get_object_member(value, &location_str, NULL);
+
+    if (status == 301 || status == 302 || status == 303
+         ||status == 307 || status == 308)
+    {
+        if (location_value == NULL) {
+            return nxt_conf_vldt_error(vldt, "The \"location\" is required if "
+                                       "\"return\" number is one of 301, 302, 303, 307 and 308.");
+        }
+
+    } else {
+        if (text_value == NULL) {
+            return nxt_conf_vldt_error(vldt, "The \"text\" is required if "
+                                       "\"return\" number is not one of 301, 302, 303, 307 and 308.");
+        }
+    }
+
+    if (text_value != NULL && location_value != NULL) {
+        return nxt_conf_vldt_error(vldt, "The \"text\" and \"location\" can not set "
+                                         "at the same time.");
+    }
+
+    return NXT_OK;
 }
 
 

@@ -312,6 +312,62 @@ ngx_http_ctrl_access_handler(ngx_http_request_t *r)
 
 
 static ngx_int_t
+ngx_http_ctrl_precontent_handler(ngx_http_request_t *r)
+{
+    ngx_str_t                  text;
+    ngx_uint_t                 status;
+    ngx_http_action_t         *action;
+    ngx_http_ctrl_ctx_t       *ctx;
+    ngx_http_complex_value_t   cv;
+    ngx_http_ctrl_loc_conf_t  *clcf;
+
+    ctx = ngx_http_ctrl_get_ctx(r);
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_ctrl_module);
+
+    if (ctx == NULL || ctx->action == NULL) {
+        return NGX_DECLINED;
+    }
+
+    if (clcf->conf_enable) {
+        action = ctx->action;
+
+        status = action->return_status;
+
+        if (status) {
+            if (status < NGX_HTTP_BAD_REQUEST
+                || action->return_text.length)
+            {
+                ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
+
+                if (status == NGX_HTTP_MOVED_PERMANENTLY
+                    || status == NGX_HTTP_MOVED_TEMPORARILY
+                    || status == NGX_HTTP_SEE_OTHER
+                    || status == NGX_HTTP_TEMPORARY_REDIRECT
+                    || status == NGX_HTTP_PERMANENT_REDIRECT)
+                {
+                    text.len = action->return_location.length;
+                    text.data = action->return_location.start;
+
+                } else {
+                    text.len = action->return_text.length;
+                    text.data = action->return_text.start;
+                }
+
+                cv.value = text;
+
+                return ngx_http_send_response(r, action->return_status,
+                                              NULL, &cv);
+            } else {
+                return action->return_status;
+            }
+        }
+    }
+
+    return NGX_DECLINED;
+}
+
+
+static ngx_int_t
 ngx_http_ctrl_header_filter(ngx_http_request_t *r)
 {
     ngx_http_ctrl_ctx_t           *ctx;
@@ -980,6 +1036,13 @@ ngx_http_ctrl_init(ngx_conf_t *cf)
     }
 
     *h = ngx_http_ctrl_access_handler;
+
+    h = ngx_array_push(&cmcf->phases[NGX_HTTP_PRECONTENT_PHASE].handlers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_ctrl_precontent_handler;
 
     ngx_http_next_header_filter = ngx_http_top_header_filter;
     ngx_http_top_header_filter = ngx_http_ctrl_header_filter;

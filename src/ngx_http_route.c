@@ -694,7 +694,10 @@ typedef struct {
     nxt_conf_value_t               *add_headers;
     nxt_conf_value_t               *limit_conn;
     nxt_conf_value_t               *limit_req;
-    uint32_t                       limit_rate;
+    nxt_uint_t                     limit_rate;
+    nxt_uint_t                     return_status;
+    nxt_str_t                      return_text;
+    nxt_str_t                      return_location;
 } ngx_http_route_action_conf_t;
 
 
@@ -740,6 +743,24 @@ static nxt_conf_map_t  ngx_http_route_action_conf[] = {
         nxt_string("limit_rate"),
         NXT_CONF_MAP_INT32,
         offsetof(ngx_http_route_action_conf_t, limit_rate)
+    },
+
+    {
+        nxt_string("return"),
+        NXT_CONF_MAP_INT32,
+        offsetof(ngx_http_route_action_conf_t, return_status),
+    },
+
+    {
+        nxt_string("text"),
+        NXT_CONF_MAP_STR,
+        offsetof(ngx_http_route_action_conf_t, return_text),
+    },
+
+    {
+        nxt_string("location"),
+        NXT_CONF_MAP_STR,
+        offsetof(ngx_http_route_action_conf_t, return_location),
     },
 };
 
@@ -1015,6 +1036,10 @@ ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
     }
 
     match->action.limit_rate = accf.limit_rate;
+
+    match->action.return_status = accf.return_status;
+    match->action.return_text = accf.return_text;
+    match->action.return_location = accf.return_location;
 
     return NXT_OK;
 }

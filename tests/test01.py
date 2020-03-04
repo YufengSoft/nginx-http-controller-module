@@ -129,6 +129,26 @@ class TestCtrl(TestControl):
             'rules two match second',
         )
 
+    def test_route_action_return(self):
+        self.assertIn(
+            'success',
+            self.conf(
+                [
+                    {
+                        "action": {
+                            "return": 200,
+                            "text": "hello"
+                        }
+                    },
+                ],
+                'routes',
+            ),
+            'return',
+        )
+
+        self.assertEqual(self.get()['status'], 200, 'return 200')
+        self.assertEqual(self.get()['body'], 'hello', 'return 200')
+
 
 if __name__ == '__main__':
     TestCtrl.main()

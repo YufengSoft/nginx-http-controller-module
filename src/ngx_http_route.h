@@ -59,6 +59,9 @@ typedef struct {
     ngx_http_action_limit_conn_t    *limit_conn;
     ngx_http_action_limit_req_t     *limit_req;
     nxt_uint_t                       limit_rate;
+    nxt_uint_t                       return_status;
+    nxt_str_t                        return_text;
+    nxt_str_t                        return_location;
 } ngx_http_action_t;
 
 
