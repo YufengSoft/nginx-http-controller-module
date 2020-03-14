@@ -11,11 +11,6 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-#define NXT_INET6                   NGX_HAVE_INET6
-#define NXT_PTR_SIZE                NGX_PTR_SIZE
-#define NXT_HAVE_MEMALIGN           NGX_HAVE_MEMALIGN
-#define NXT_HAVE_POSIX_MEMALIGN     NGX_HAVE_POSIX_MEMALIGN
-
 #include <nxt_clang.h>
 #include <nxt_types.h>
 #include <nxt_malloc.h>

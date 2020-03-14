@@ -19,7 +19,7 @@ static ngx_http_conf_t  *ngx_http_conf;
 
 
 ngx_int_t
-ngx_http_conf_start(nxt_file_t *file, nxt_str_t *error)
+ngx_http_conf_start(ngx_cycle_t *cycle, nxt_file_t *file, nxt_str_t *error)
 {
     nxt_mp_t          *mp;
     nxt_conf_value_t  *conf;
@@ -34,7 +34,7 @@ ngx_http_conf_start(nxt_file_t *file, nxt_str_t *error)
         goto fail;
     }
 
-    if (ngx_http_conf_apply(mp, conf) != NXT_OK) {
+    if (ngx_http_conf_apply(cycle, mp, conf) != NXT_OK) {
         goto fail;
     }
 
@@ -58,6 +58,7 @@ ngx_http_conf_get(nxt_mp_t *mp, nxt_file_t *file, nxt_str_t *error)
     nxt_file_info_t        fi;
     nxt_conf_value_t       *value;
     nxt_conf_validation_t  vldt;
+    nxt_conf_json_error_t  err;
 
     static const nxt_str_t json = nxt_string("{ \"routes\": [] }");
 
@@ -84,8 +85,9 @@ ngx_http_conf_get(nxt_mp_t *mp, nxt_file_t *file, nxt_str_t *error)
             n = nxt_file_read(file, start, size, 0);
 
             if (n == (ssize_t) size) {
+                nxt_memzero(&err, sizeof(nxt_conf_json_error_t));
 
-                value = nxt_conf_json_parse(mp, start, start + size, NULL);
+                value = nxt_conf_json_parse(mp, start, start + size, &err);
 
                 if (nxt_fast_path(value != NULL)) {
 
@@ -122,6 +124,18 @@ ngx_http_conf_get(nxt_mp_t *mp, nxt_file_t *file, nxt_str_t *error)
                     /* NXT_ERROR */
 
                     return NULL;
+
+                } else {
+                    error->length = nxt_strlen(err.detail);
+                    error->start = nxt_mp_alloc(mp, error->length);
+
+                    if (nxt_slow_path(error->start == NULL)) {
+                        return NULL;
+                    }
+
+                    nxt_memcpy(error->start, err.detail, error->length);
+
+                    goto invalid; 
                 }
             }
 
@@ -136,7 +150,7 @@ invalid:
 
 
 ngx_int_t
-ngx_http_conf_apply(nxt_mp_t *mp, nxt_conf_value_t *conf)
+ngx_http_conf_apply(ngx_cycle_t *cycle, nxt_mp_t *mp, nxt_conf_value_t *conf)
 {
     ngx_http_conf_t     *http_conf;
     nxt_conf_value_t    *routes_conf;
@@ -156,7 +170,7 @@ ngx_http_conf_apply(nxt_mp_t *mp, nxt_conf_value_t *conf)
     routes_conf = nxt_conf_get_path(conf, &routes_path);
 
     if (nxt_fast_path(routes_conf != NULL)) {
-        routes = ngx_http_routes_create(mp, routes_conf);
+        routes = ngx_http_routes_create(http_conf, routes_conf);
         if (nxt_slow_path(routes == NULL)) {
             return NGX_ERROR;
         }
@@ -418,7 +432,7 @@ alloc_fail:
 
 conf_done:
 
-    ret = ngx_http_conf_apply(mp, value);
+    ret = ngx_http_conf_apply(NULL, mp, value);
 
     if (nxt_fast_path(ret == NXT_OK)) {
 

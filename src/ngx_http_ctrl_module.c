@@ -450,7 +450,7 @@ ngx_http_ctrl_init_module(ngx_cycle_t *cycle)
 
     nxt_memzero(&error, sizeof(nxt_str_t));
 
-    if (ngx_http_conf_start(&cmcf->file, &error) != NGX_OK) {
+    if (ngx_http_conf_start(cycle, &cmcf->file, &error) != NGX_OK) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                       "http conf start failed.");
         return NGX_ERROR;

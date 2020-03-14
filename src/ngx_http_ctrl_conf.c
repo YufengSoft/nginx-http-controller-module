@@ -632,7 +632,7 @@ ngx_http_ctrl_notify_read_handler(ngx_event_t *rev)
         return;
     }
 
-    rc = ngx_http_conf_apply(mp, value);
+    rc = ngx_http_conf_apply(NULL, mp, value);
     if (rc != NGX_OK) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                       "router conf apply failed.");

@@ -9,6 +9,7 @@
 
 
 typedef struct ngx_http_routes_s    ngx_http_routes_t;
+typedef struct ngx_http_conf_s      ngx_http_conf_t;
 
 
 typedef struct {
@@ -65,7 +66,7 @@ typedef struct {
 } ngx_http_action_t;
 
 
-ngx_http_routes_t *ngx_http_routes_create(nxt_mp_t *mp,
+ngx_http_routes_t *ngx_http_routes_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *routes_conf);
 ngx_http_action_t *ngx_http_route_action(ngx_http_request_t *r,
     ngx_http_routes_t *routes);

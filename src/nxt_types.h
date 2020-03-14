@@ -8,6 +8,13 @@
 #define _NXT_TYPES_H_INCLUDED_
 
 
+#define NXT_INET6                   NGX_HAVE_INET6
+#define NXT_HAVE_UNIX_DOMAIN        NGX_HAVE_UNIX_DOMAIN
+#define NXT_PTR_SIZE                NGX_PTR_SIZE
+#define NXT_HAVE_MEMALIGN           NGX_HAVE_MEMALIGN
+#define NXT_HAVE_POSIX_MEMALIGN     NGX_HAVE_POSIX_MEMALIGN
+
+
 /*
  * nxt_int_t corresponds to the most efficient integer type,
  * an architecture word.  It is usually the long type,
@@ -69,6 +76,12 @@ typedef int                  nxt_err_t;
 #define NXT_AGAIN                  (-2)
 #define NXT_DECLINED               (-3)
 #define NXT_DONE                   (-4)
+
+
+#define NXT_LOG_ERR  NGX_LOG_ERR
+
+#define nxt_thread_log_error(_level, ...)                                     \
+        ngx_log_error(_level, ngx_cycle->log, 0, __VA_ARGS__);
 
 
 #endif /* _NXT_TYPES_H_INCLUDED_ */

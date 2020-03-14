@@ -101,17 +101,19 @@ struct ngx_http_routes_s {
 };
 
 
-static ngx_http_route_match_t *ngx_http_route_match_create(nxt_mp_t *mp,
+static ngx_http_route_match_t *ngx_http_route_match_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *cv);
-static ngx_http_route_table_t *ngx_http_route_table_create(nxt_mp_t *mp,
+static ngx_http_route_table_t *ngx_http_route_table_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *table_cv, ngx_http_route_object_t object,
     nxt_bool_t case_sensitive);
-static ngx_http_route_ruleset_t *ngx_http_route_ruleset_create(nxt_mp_t *mp,
+static ngx_http_route_ruleset_t *
+    ngx_http_route_ruleset_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *ruleset_cv, ngx_http_route_object_t object,
     nxt_bool_t case_sensitive);
-static ngx_http_route_rule_t *ngx_http_route_rule_name_create(nxt_mp_t *mp,
+static ngx_http_route_rule_t *
+    ngx_http_route_rule_name_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *rule_cv, nxt_str_t *name, nxt_bool_t case_sensitive);
-static ngx_http_route_rule_t *ngx_http_route_rule_create(nxt_mp_t *mp,
+static ngx_http_route_rule_t *ngx_http_route_rule_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *cv, nxt_bool_t case_sensitive,
     ngx_http_route_pattern_case_t pattern_case);
 static int nxt_http_pattern_compare(const void *one, const void *two);
@@ -120,7 +122,7 @@ static nxt_int_t ngx_http_route_pattern_create(nxt_mp_t *mp,
     ngx_http_route_pattern_case_t pattern_case);
 static u_char *ngx_http_route_pattern_copy(nxt_mp_t *mp, nxt_str_t *test,
     ngx_http_route_pattern_case_t pattern_case);
-static nxt_int_t ngx_http_route_action_create(nxt_mp_t *mp,
+static nxt_int_t ngx_http_route_action_create(ngx_http_conf_t *conf,
     nxt_conf_value_t *cv, ngx_http_route_match_t *match);
 
 static ngx_http_action_t *ngx_http_route_match(ngx_http_request_t *r,
@@ -154,7 +156,7 @@ static nxt_array_t *ngx_http_arguments_parse(ngx_http_request_t *r);
 
 
 ngx_http_routes_t *
-ngx_http_routes_create(nxt_mp_t *mp, nxt_conf_value_t *routes_conf)
+ngx_http_routes_create(ngx_http_conf_t *conf, nxt_conf_value_t *routes_conf)
 {
     size_t                  size;
     uint32_t                i, n;
@@ -165,7 +167,7 @@ ngx_http_routes_create(nxt_mp_t *mp, nxt_conf_value_t *routes_conf)
     n = nxt_conf_array_elements_count(routes_conf);
     size = sizeof(ngx_http_routes_t) + n * sizeof(ngx_http_route_match_t *);
 
-    routes = nxt_mp_alloc(mp, size);
+    routes = nxt_mp_alloc(conf->pool, size);
     if (nxt_slow_path(routes == NULL)) {
         return NULL;
     }
@@ -176,7 +178,7 @@ ngx_http_routes_create(nxt_mp_t *mp, nxt_conf_value_t *routes_conf)
     for (i = 0; i < n; i++) {
         value = nxt_conf_get_array_element(routes_conf, i);
 
-        match = ngx_http_route_match_create(mp, value);
+        match = ngx_http_route_match_create(conf, value);
         if (match == NULL) {
             return NULL;
         }
@@ -237,7 +239,7 @@ static nxt_conf_map_t  ngx_http_route_match_conf[] = {
 
 
 static ngx_http_route_match_t *
-ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
+ngx_http_route_match_create(ngx_http_conf_t *conf, nxt_conf_value_t *cv)
 {
     size_t                       size;
     uint32_t                     n;
@@ -256,7 +258,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     n = (match_conf != NULL) ? nxt_conf_object_members_count(match_conf) : 0;
     size = sizeof(ngx_http_route_match_t) + n * sizeof(ngx_http_route_rule_t *);
 
-    match = nxt_mp_zalloc(mp, size);
+    match = nxt_mp_zalloc(conf->pool, size);
     if (nxt_slow_path(match == NULL)) {
         return NULL;
     }
@@ -269,7 +271,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
 
     nxt_memzero(&mtcf, sizeof(mtcf));
 
-    ret = nxt_conf_map_object(mp, match_conf, ngx_http_route_match_conf,
+    ret = nxt_conf_map_object(conf->pool, match_conf, ngx_http_route_match_conf,
                               nxt_nitems(ngx_http_route_match_conf), &mtcf);
     if (ret != NXT_OK) {
         return NULL;
@@ -278,7 +280,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     test = &match->test[0];
 
     if (mtcf.scheme != NULL) {
-        rule = ngx_http_route_rule_create(mp, mtcf.scheme, 1,
+        rule = ngx_http_route_rule_create(conf, mtcf.scheme, 1,
                                           NGX_HTTP_ROUTE_PATTERN_NOCASE);
         if (rule == NULL) {
             return NULL;
@@ -290,7 +292,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     }
 
     if (mtcf.uri != NULL) {
-        rule = ngx_http_route_rule_create(mp, mtcf.uri, 1,
+        rule = ngx_http_route_rule_create(conf, mtcf.uri, 1,
                                           NGX_HTTP_ROUTE_PATTERN_NOCASE);
         if (rule == NULL) {
             return NULL;
@@ -303,7 +305,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     }
 
     if (mtcf.method != NULL) {
-        rule = ngx_http_route_rule_create(mp, mtcf.method, 1,
+        rule = ngx_http_route_rule_create(conf, mtcf.method, 1,
                                           NGX_HTTP_ROUTE_PATTERN_UPCASE);
         if (rule == NULL) {
             return NULL;
@@ -316,7 +318,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     }
 
     if (mtcf.host != NULL) {
-        rule = ngx_http_route_rule_create(mp, mtcf.host, 1,
+        rule = ngx_http_route_rule_create(conf, mtcf.host, 1,
                                           NGX_HTTP_ROUTE_PATTERN_LOWCASE);
         if (rule == NULL) {
             return NULL;
@@ -328,7 +330,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     }
 
     if (mtcf.headers != NULL) {
-        table = ngx_http_route_table_create(mp, mtcf.headers,
+        table = ngx_http_route_table_create(conf, mtcf.headers,
                                             NGX_HTTP_ROUTE_HEADER, 0);
         if (table == NULL) {
             return NULL;
@@ -339,7 +341,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
     }
 
     if (mtcf.arguments != NULL) {
-        table = ngx_http_route_table_create(mp, mtcf.arguments,
+        table = ngx_http_route_table_create(conf, mtcf.arguments,
                                             NGX_HTTP_ROUTE_ARGUMENT, 1);
         if (table == NULL) {
             return NULL;
@@ -351,7 +353,7 @@ ngx_http_route_match_create(nxt_mp_t *mp, nxt_conf_value_t *cv)
 
 action_create:
 
-    ret = ngx_http_route_action_create(mp, cv, match);
+    ret = ngx_http_route_action_create(conf, cv, match);
     if (nxt_slow_path(ret != NXT_OK)) {
         return NULL;
     }
@@ -361,7 +363,7 @@ action_create:
 
 
 static ngx_http_route_table_t *
-ngx_http_route_table_create(nxt_mp_t *mp, nxt_conf_value_t *table_cv,
+ngx_http_route_table_create(ngx_http_conf_t *conf, nxt_conf_value_t *table_cv,
     ngx_http_route_object_t object, nxt_bool_t case_sensitive)
 {
     size_t                    size;
@@ -376,7 +378,7 @@ ngx_http_route_table_create(nxt_mp_t *mp, nxt_conf_value_t *table_cv,
     size = sizeof(ngx_http_route_table_t)
            + n * sizeof(ngx_http_route_ruleset_t *);
 
-    table = nxt_mp_alloc(mp, size);
+    table = nxt_mp_alloc(conf->pool, size);
     if (nxt_slow_path(table == NULL)) {
         return NULL;
     }
@@ -385,7 +387,8 @@ ngx_http_route_table_create(nxt_mp_t *mp, nxt_conf_value_t *table_cv,
     table->object = NGX_HTTP_ROUTE_TABLE;
 
     if (!array) {
-        ruleset = ngx_http_route_ruleset_create(mp, table_cv, object, case_sensitive);
+        ruleset = ngx_http_route_ruleset_create(conf, table_cv, object,
+                                                case_sensitive);
         if (nxt_slow_path(ruleset == NULL)) {
             return NULL;
         }
@@ -398,7 +401,8 @@ ngx_http_route_table_create(nxt_mp_t *mp, nxt_conf_value_t *table_cv,
     for (i = 0; i < n; i++) {
         ruleset_cv = nxt_conf_get_array_element(table_cv, i);
 
-        ruleset = ngx_http_route_ruleset_create(mp, ruleset_cv, object, case_sensitive);
+        ruleset = ngx_http_route_ruleset_create(conf, ruleset_cv, object,
+                                                case_sensitive);
         if (nxt_slow_path(ruleset == NULL)) {
             return NULL;
         }
@@ -411,7 +415,7 @@ ngx_http_route_table_create(nxt_mp_t *mp, nxt_conf_value_t *table_cv,
 
 
 static ngx_http_route_ruleset_t *
-ngx_http_route_ruleset_create(nxt_mp_t *mp, nxt_conf_value_t *ruleset_cv,
+ngx_http_route_ruleset_create(ngx_http_conf_t *conf, nxt_conf_value_t *ruleset_cv,
     ngx_http_route_object_t object, nxt_bool_t case_sensitive)
 {
     size_t                    size;
@@ -425,7 +429,7 @@ ngx_http_route_ruleset_create(nxt_mp_t *mp, nxt_conf_value_t *ruleset_cv,
     size = sizeof(ngx_http_route_ruleset_t)
            + n * sizeof(ngx_http_route_rule_t *);
 
-    ruleset = nxt_mp_alloc(mp, size);
+    ruleset = nxt_mp_alloc(conf->pool, size);
     if (nxt_slow_path(ruleset == NULL)) {
         return NULL;
     }
@@ -437,7 +441,8 @@ ngx_http_route_ruleset_create(nxt_mp_t *mp, nxt_conf_value_t *ruleset_cv,
     for (i = 0; i < n; i++) {
         rule_cv = nxt_conf_next_object_member(ruleset_cv, &name, &next);
 
-        rule = ngx_http_route_rule_name_create(mp, rule_cv, &name, case_sensitive);
+        rule = ngx_http_route_rule_name_create(conf, rule_cv, &name,
+                                               case_sensitive);
         if (nxt_slow_path(rule == NULL)) {
             return NULL;
         }
@@ -451,7 +456,7 @@ ngx_http_route_ruleset_create(nxt_mp_t *mp, nxt_conf_value_t *ruleset_cv,
 
 
 static ngx_http_route_rule_t *
-ngx_http_route_rule_name_create(nxt_mp_t *mp, nxt_conf_value_t *rule_cv,
+ngx_http_route_rule_name_create(ngx_http_conf_t *conf, nxt_conf_value_t *rule_cv,
     nxt_str_t *name, nxt_bool_t case_sensitive)
 {
     u_char                 c, *p;
@@ -459,7 +464,7 @@ ngx_http_route_rule_name_create(nxt_mp_t *mp, nxt_conf_value_t *rule_cv,
     nxt_uint_t             i;
     ngx_http_route_rule_t  *rule;
 
-    rule = ngx_http_route_rule_create(mp, rule_cv, case_sensitive,
+    rule = ngx_http_route_rule_create(conf, rule_cv, case_sensitive,
                                       NGX_HTTP_ROUTE_PATTERN_NOCASE);
     if (nxt_slow_path(rule == NULL)) {
         return NULL;
@@ -467,7 +472,7 @@ ngx_http_route_rule_name_create(nxt_mp_t *mp, nxt_conf_value_t *rule_cv,
 
     rule->u.name.length = name->length;
 
-    p = nxt_mp_nget(mp, name->length);
+    p = nxt_mp_nget(conf->pool, name->length);
     if (nxt_slow_path(p == NULL)) {
         return NULL;
     }
@@ -491,7 +496,7 @@ ngx_http_route_rule_name_create(nxt_mp_t *mp, nxt_conf_value_t *rule_cv,
 
 
 static ngx_http_route_rule_t *
-ngx_http_route_rule_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
+ngx_http_route_rule_create(ngx_http_conf_t *conf, nxt_conf_value_t *cv,
     nxt_bool_t case_sensitive, ngx_http_route_pattern_case_t pattern_case)
 {
     size_t                    size;
@@ -506,7 +511,7 @@ ngx_http_route_rule_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
     n = string ? 1 : nxt_conf_array_elements_count(cv);
     size = sizeof(ngx_http_route_rule_t) + n * sizeof(ngx_http_route_pattern_t);
 
-    rule = nxt_mp_alloc(mp, size);
+    rule = nxt_mp_alloc(conf->pool, size);
     if (nxt_slow_path(rule == NULL)) {
         return NULL;
     }
@@ -517,7 +522,8 @@ ngx_http_route_rule_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
 
     if (string) {
         pattern[0].case_sensitive = case_sensitive;
-        ret = ngx_http_route_pattern_create(mp, cv, &pattern[0], pattern_case);
+        ret = ngx_http_route_pattern_create(conf->pool, cv, &pattern[0],
+                                            pattern_case);
         if (nxt_slow_path(ret != NXT_OK)) {
             return NULL;
         }
@@ -531,7 +537,8 @@ ngx_http_route_rule_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
         pattern[i].case_sensitive = case_sensitive;
         value = nxt_conf_get_array_element(cv, i);
 
-        ret = ngx_http_route_pattern_create(mp, value, &pattern[i], pattern_case);
+        ret = ngx_http_route_pattern_create(conf->pool, value, &pattern[i],
+                                            pattern_case);
         if (nxt_slow_path(ret != NXT_OK)) {
             return NULL;
         }
@@ -802,14 +809,15 @@ static nxt_conf_map_t  ngx_http_route_action_limit_req_conf[] = {
 
 
 static nxt_int_t
-ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
+ngx_http_route_action_create(ngx_http_conf_t *conf, nxt_conf_value_t *cv,
     ngx_http_route_match_t *match)
 {
     size_t                         size;
     uint32_t                       i, n, next;
+    nxt_mp_t                       *mp;
     nxt_int_t                      ret;
-    nxt_bool_t                     array;
     nxt_str_t                      name, value;
+    nxt_bool_t                     array;
     nxt_conf_value_t               *action_conf, *addr_conf;
     nxt_conf_value_t               *headers_conf, *header_conf;
     nxt_conf_value_t               *variables_conf, *variable_conf;
@@ -825,6 +833,8 @@ ngx_http_route_action_create(nxt_mp_t *mp, nxt_conf_value_t *cv,
     ngx_http_route_action_conf_t   accf;
 
     static nxt_str_t  action_path = nxt_string("/action");
+
+    mp = conf->pool;
 
     action_conf = nxt_conf_get_path(cv, &action_path);
     if (action_conf == NULL) {
