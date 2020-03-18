@@ -149,14 +149,200 @@ invalid:
 }
 
 
+static ngx_http_upstream_srv_conf_t *
+ngx_http_upstream_get_zone(ngx_cycle_t *cycle, nxt_str_t *name)
+{
+    ngx_uint_t                      i;
+    ngx_http_upstream_srv_conf_t   *uscf, **uscfp;
+    ngx_http_upstream_main_conf_t  *umcf;
+
+    umcf = ngx_http_cycle_get_module_main_conf(cycle, ngx_http_upstream_module);
+    uscfp = umcf->upstreams.elts;
+
+    for (i = 0; i < umcf->upstreams.nelts; i++) {
+        uscf = uscfp[i];
+
+        if (uscf->shm_zone != NULL
+            && uscf->shm_zone->shm.name.len == name->length
+            && ngx_strncmp(uscf->shm_zone->shm.name.data, name->start,
+                          name->length) == 0)
+        {
+            return uscf;
+        }
+    }
+
+    return NULL;
+}
+
+
+static void
+ngx_http_upstream_peer_free(ngx_slab_pool_t *pool,
+    ngx_http_upstream_rr_peer_t *peer)
+{
+    if (peer->server.data) {
+        ngx_slab_free_locked(pool, peer->server.data);
+    }
+
+    if (peer->name.data) {
+        ngx_slab_free_locked(pool, peer->name.data);
+    }
+
+    if (peer->sockaddr) {
+        ngx_slab_free_locked(pool, peer->sockaddr);
+    }
+
+    ngx_slab_free_locked(pool, peer);
+}
+
+
+static ngx_http_upstream_rr_peer_t *
+ngx_http_upstream_zone_copy_peer(ngx_slab_pool_t *pool,
+    nxt_upstream_round_robin_server_t *srv)
+{
+    u_char                       *start;
+    nxt_sockaddr_t               *sa;
+    ngx_http_upstream_rr_peer_t  *peer;
+
+    sa = srv->sockaddr;
+
+    peer = ngx_slab_calloc_locked(pool, sizeof(ngx_http_upstream_rr_peer_t));
+    if (peer == NULL) {
+        return NULL;
+    }
+
+    peer->weight = srv->weight;
+    peer->max_conns = srv->max_conns;
+    peer->max_fails = srv->max_fails;
+    peer->fail_timeout = srv->fail_timeout;
+    peer->down = srv->down;
+
+    peer->socklen = sa->socklen;
+
+    peer->sockaddr = ngx_slab_calloc_locked(pool, sizeof(ngx_sockaddr_t));
+    if (peer->sockaddr == NULL) {
+        goto failed;
+    }
+
+    ngx_memcpy(peer->sockaddr, &sa->u.sockaddr, sa->socklen);
+
+    peer->name.len = nxt_sockaddr_size(sa);
+    peer->name.data = ngx_slab_calloc_locked(pool, peer->name.len);
+
+    if (peer->name.data == NULL) {
+        goto failed;
+    }
+
+    start = nxt_sockaddr_start(sa);
+    ngx_memcpy(peer->name.data, start, peer->name.len);
+
+    peer->server.len = peer->name.len;
+    peer->server.data = ngx_slab_alloc_locked(pool, peer->server.len);
+
+    if (peer->server.data == NULL) {
+        goto failed;
+    }
+
+    ngx_memcpy(peer->server.data, peer->name.data, peer->server.len);
+
+    return peer;
+
+failed:
+
+    ngx_http_upstream_peer_free(pool, peer);
+
+    return NULL;
+}
+
+
+static ngx_int_t
+ngx_http_upstream_peers_copy(nxt_upstream_t *upstream,
+    ngx_http_upstream_srv_conf_t *uscf)
+{
+    nxt_uint_t                     i, n;
+    ngx_slab_pool_t               *shpool;
+    nxt_upstream_round_robin_t    *urr;
+    ngx_http_upstream_rr_peer_t   *peer, **peerp, *old_peer, *old_backup;
+    ngx_http_upstream_rr_peers_t  *peers, *backup;
+
+    urr = upstream->round_robin;
+    peers = uscf->peer.data;
+    backup = peers->next;
+    shpool = peers->shpool;
+    peerp = &peers->peer;
+
+    old_peer = peers->peer;
+    old_backup = backup ? backup->peer : NULL;
+
+    n = urr->items;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    peers->single = (n == 1);
+
+    for (i = 0; i < n; i++) {
+        peer = ngx_http_upstream_zone_copy_peer(shpool, &urr->server[i]);
+        if (peer == NULL) {
+            ngx_shmtx_unlock(&shpool->mutex);
+            return NGX_ERROR;
+        }
+
+        *peerp = peer;
+        peerp = &peer->next;
+    }
+
+    for (peer = old_peer; peer; peer = peer->next) {
+        ngx_http_upstream_peer_free(shpool, peer);
+    }
+
+    for (peer = old_backup; peer; peer = peer->next) {
+        ngx_http_upstream_peer_free(shpool, peer);
+    }
+
+    ngx_shmtx_unlock(&shpool->mutex);
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_upstream_apply(ngx_cycle_t *cycle, nxt_upstreams_t *upstreams)
+{
+    ngx_int_t                     ret;
+    nxt_uint_t                    i;
+    nxt_upstream_t                *upstream;
+    ngx_http_upstream_srv_conf_t  *uscf;
+
+    for (i = 0; i < upstreams->items; i++) {
+        upstream = &upstreams->upstream[i];
+        uscf = ngx_http_upstream_get_zone(cycle, &upstream->zone_name);
+
+        if (uscf != NULL) {
+            ret = ngx_http_upstream_peers_copy(upstream, uscf);
+            if (ret != NGX_OK) {
+                return ret;
+            }
+        }
+    }
+
+    return NGX_OK;
+}
+
+
 ngx_int_t
 ngx_http_conf_apply(ngx_cycle_t *cycle, nxt_mp_t *mp, nxt_conf_value_t *conf)
 {
+    ngx_int_t           ret;
+    nxt_upstreams_t     *upstreams;
     ngx_http_conf_t     *http_conf;
-    nxt_conf_value_t    *routes_conf;
+    nxt_conf_value_t    *routes_conf, *upstreams_conf;
     ngx_http_routes_t   *routes;
 
     static nxt_str_t  routes_path = nxt_string("/routes");
+    static nxt_str_t  upstreams_path = nxt_string("/upstreams");
+
+    if (cycle == NULL) {
+        cycle = (ngx_cycle_t *) ngx_cycle;
+    }
 
     http_conf = nxt_mp_zalloc(mp, sizeof(ngx_http_conf_t));
     if (http_conf == NULL) {
@@ -166,6 +352,20 @@ ngx_http_conf_apply(ngx_cycle_t *cycle, nxt_mp_t *mp, nxt_conf_value_t *conf)
     http_conf->count = 1;
     http_conf->pool = mp;
     http_conf->root = conf;
+
+    upstreams_conf = nxt_conf_get_path(conf, &upstreams_path);
+
+    if (upstreams_conf != NULL) {
+        upstreams = nxt_upstreams_create(mp, upstreams_conf);
+        if (nxt_slow_path(upstreams == NULL)) {
+            return NGX_ERROR;
+        }
+
+        ret = ngx_http_upstream_apply(cycle, upstreams);
+        if (ret != NXT_OK) {
+            return NGX_ERROR;
+        }
+    }
 
     routes_conf = nxt_conf_get_path(conf, &routes_path);
 

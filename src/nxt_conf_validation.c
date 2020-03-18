@@ -69,6 +69,21 @@ static nxt_int_t nxt_conf_vldt_match_addrs(nxt_conf_validation_t *vldt,
 static nxt_int_t nxt_conf_vldt_match_addr(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value);
 
+static nxt_int_t nxt_conf_vldt_upstream(nxt_conf_validation_t *vldt,
+     nxt_str_t *name, nxt_conf_value_t *value);
+static nxt_int_t nxt_conf_vldt_server(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value);
+static nxt_int_t nxt_conf_vldt_server_address(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+static nxt_int_t nxt_conf_vldt_server_weight(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+static nxt_int_t nxt_conf_vldt_server_max_conns(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+static nxt_int_t nxt_conf_vldt_server_max_fails(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+static nxt_int_t nxt_conf_vldt_server_fail_timeout(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data);
+
 static nxt_int_t nxt_conf_vldt_variable(nxt_conf_validation_t *vldt,
     nxt_str_t *name, nxt_conf_value_t *value);
 static nxt_int_t nxt_conf_vldt_add_header(nxt_conf_validation_t *vldt,
@@ -81,6 +96,11 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_root_members[] = {
       NXT_CONF_VLDT_ARRAY,
       &nxt_conf_vldt_array_iterator,
       (void *) &nxt_conf_vldt_route },
+
+    { nxt_string("upstreams"),
+      NXT_CONF_VLDT_OBJECT,
+      &nxt_conf_vldt_object_iterator,
+      (void *) &nxt_conf_vldt_upstream },
 
     NXT_CONF_VLDT_END
 };
@@ -221,6 +241,41 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_route_members[] = {
     { nxt_string("action"),
       NXT_CONF_VLDT_OBJECT,
       &nxt_conf_vldt_action,
+      NULL },
+
+    NXT_CONF_VLDT_END
+};
+
+
+static nxt_conf_vldt_object_t  nxt_conf_vldt_upstream_server_members[] = {
+    { nxt_string("address"),
+      NXT_CONF_VLDT_STRING,
+      &nxt_conf_vldt_server_address,
+      NULL },
+
+    { nxt_string("weight"),
+      NXT_CONF_VLDT_INTEGER,
+      &nxt_conf_vldt_server_weight,
+      NULL },
+
+    { nxt_string("max_conns"),
+      NXT_CONF_VLDT_INTEGER,
+      &nxt_conf_vldt_server_max_conns,
+      NULL },
+
+    { nxt_string("max_fails"),
+      NXT_CONF_VLDT_INTEGER,
+      &nxt_conf_vldt_server_max_fails,
+      NULL },
+
+    { nxt_string("fail_timeout"),
+      NXT_CONF_VLDT_INTEGER,
+      &nxt_conf_vldt_server_fail_timeout,
+      NULL },
+
+    { nxt_string("down"),
+      NXT_CONF_VLDT_BOOLEAN,
+      NULL,
       NULL },
 
     NXT_CONF_VLDT_END
@@ -739,6 +794,152 @@ nxt_conf_vldt_add_header(nxt_conf_validation_t *vldt, nxt_str_t *name,
     if (nxt_conf_type(value) != NXT_CONF_STRING) {
         return nxt_conf_vldt_error(vldt, "The \"%V\" add_header value must be "
                                    "a string.", name);
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_upstream(nxt_conf_validation_t *vldt, nxt_str_t *name,
+    nxt_conf_value_t *value)
+{
+    nxt_int_t   ret;
+    nxt_uint_t  n;
+
+    ret = nxt_conf_vldt_type(vldt, name, value, NXT_CONF_VLDT_ARRAY);
+    if (ret != NXT_OK) {
+        return ret;
+    }
+
+    ret = nxt_conf_vldt_array_iterator(vldt, value, &nxt_conf_vldt_server);
+    if (ret != NXT_OK) {
+        return ret;
+    }
+
+    n = nxt_conf_array_elements_count(value);
+    if (n == 0) {
+        return nxt_conf_vldt_error(vldt, "The \"%V\" upstream must contain servers.");
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server(nxt_conf_validation_t *vldt, nxt_conf_value_t *value)
+{
+    if (nxt_conf_type(value) != NXT_CONF_OBJECT) {
+        return nxt_conf_vldt_error(vldt, "The \"upstreams\" server value must be "
+                                   "a object.");
+    }
+
+    return nxt_conf_vldt_object(vldt, value,
+                                nxt_conf_vldt_upstream_server_members);
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server_address(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    nxt_str_t       address;
+    nxt_sockaddr_t  *sa;
+
+    nxt_conf_get_string(value, &address);
+
+    sa = nxt_sockaddr_parse(vldt->pool, &address);
+    if (sa == NULL) {
+        return nxt_conf_vldt_error(vldt, "The \"%V\" is not valid "
+                                   "server address.", &address);
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server_weight(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    int64_t  int_value;
+
+    int_value = nxt_conf_get_integer(value);
+
+    if (int_value <= 0) {
+        return nxt_conf_vldt_error(vldt, "The \"weight\" number must be "
+                                   "greater than 0.");
+    }
+
+    if (int_value > NXT_INT32_T_MAX) {
+        return nxt_conf_vldt_error(vldt, "The \"weight\" number must "
+                                   "not exceed %d.", NXT_INT32_T_MAX);
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server_max_conns(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    int64_t  int_value;
+
+    int_value = nxt_conf_get_integer(value);
+
+    if (int_value <= 0) {
+        return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must be "
+                                   "greater than 0.");
+    }
+
+    if (int_value > NXT_INT32_T_MAX) {
+        return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must "
+                                   "not exceed %d.", NXT_INT32_T_MAX);
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server_max_fails(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    int64_t  int_value;
+
+    int_value = nxt_conf_get_integer(value);
+
+    if (int_value <= 0) {
+        return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must be "
+                                   "greater than 0.");
+    }
+
+    if (int_value > NXT_INT32_T_MAX) {
+        return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must "
+                                   "not exceed %d.", NXT_INT32_T_MAX);
+    }
+
+    return NXT_OK;
+}
+
+
+static nxt_int_t
+nxt_conf_vldt_server_fail_timeout(nxt_conf_validation_t *vldt,
+    nxt_conf_value_t *value, void *data)
+{
+    int64_t  int_value;
+
+    int_value = nxt_conf_get_integer(value);
+
+    if (int_value <= 0) {
+        return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must be "
+                                   "greater than 0.");
+    }
+
+    if (int_value > NXT_INT32_T_MAX) {
+        return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must "
+                                   "not exceed %d.", NXT_INT32_T_MAX);
     }
 
     return NXT_OK;

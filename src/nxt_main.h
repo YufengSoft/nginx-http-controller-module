@@ -29,6 +29,7 @@
 #include <nxt_sprintf.h>
 #include <nxt_conf.h>
 #include <nxt_addr.h>
+#include <nxt_upstream.h>
 
 
 #endif /* _NXT_LIB_H_INCLUDED_ */

@@ -23,6 +23,7 @@ ngx_module_deps="$ngx_addon_dir/src/nxt_clang.h \
                  $ngx_addon_dir/src/nxt_sprintf.h \
                  $ngx_addon_dir/src/nxt_conf.h \
                  $ngx_addon_dir/src/nxt_addr.h \
+                 $ngx_addon_dir/src/nxt_upstream.h \
                  $ngx_addon_dir/src/nxt_main.h \
                  $ngx_addon_dir/src/ngx_http_route.h \
                  $ngx_addon_dir/src/ngx_http_conf.h \
@@ -44,6 +45,7 @@ ngx_module_srcs="$ngx_addon_dir/src/nxt_malloc.c \
                  $ngx_addon_dir/src/nxt_conf.c \
                  $ngx_addon_dir/src/nxt_conf_validation.c \
                  $ngx_addon_dir/src/nxt_addr.c \
+                 $ngx_addon_dir/src/nxt_upstream.c \
                  $ngx_addon_dir/src/ngx_http_route.c \
                  $ngx_addon_dir/src/ngx_http_conf.c \
                  $ngx_addon_dir/src/ngx_http_ctrl_conf.c \
