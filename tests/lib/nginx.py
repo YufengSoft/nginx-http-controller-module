@@ -65,37 +65,6 @@ class TestNginx(unittest.TestCase):
     def setUp(self, conf):
         self._run(conf)
 
-    def tearDown(self):
-        self.stop()
-
-        # detect errors and failures for current test
-
-        def list2reason(exc_list):
-            if exc_list and exc_list[-1][0] is self:
-                return exc_list[-1][1]
-
-        if hasattr(self, '_outcome'):
-            result = self.defaultTestResult()
-            self._feedErrorsToResult(result, self._outcome.errors)
-        else:
-            result = getattr(
-                self, '_outcomeForDoCleanups', self._resultForDoCleanups
-            )
-
-        success = not list2reason(result.errors) and not list2reason(
-            result.failures
-        )
-
-        if not TestNginx.save_log and success:
-            shutil.rmtree(self.testdir)
-
-        else:
-            self._print_log()
-
-    def stop(self):
-        if self._started:
-            self._stop()
-
     def _run(self, conf=None):
         self.nginx_bin = os.getenv(
             'TEST_NGINX_BINARY', '/usr/local/nginx/sbin/nginx'
@@ -131,6 +100,37 @@ class TestNginx(unittest.TestCase):
             exit("Could not start nginx")
 
         self._started = True
+
+    def tearDown(self):
+        self.stop()
+
+        # detect errors and failures for current test
+
+        def list2reason(exc_list):
+            if exc_list and exc_list[-1][0] is self:
+                return exc_list[-1][1]
+
+        if hasattr(self, '_outcome'):
+            result = self.defaultTestResult()
+            self._feedErrorsToResult(result, self._outcome.errors)
+        else:
+            result = getattr(
+                self, '_outcomeForDoCleanups', self._resultForDoCleanups
+            )
+
+        success = not list2reason(result.errors) and not list2reason(
+            result.failures
+        )
+
+        if not TestNginx.save_log and success:
+            shutil.rmtree(self.testdir)
+
+        else:
+            self._print_log()
+
+    def stop(self):
+        if self._started:
+            self._stop()
 
     def _stop(self):
         with open(self.pid_file, 'r') as f:
