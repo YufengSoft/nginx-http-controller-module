@@ -12,7 +12,18 @@ Contents
 Features
 ========
 
-- display stub and http status with json format.
+### dynamically config
+configuration updates dynamically via a RESTful JSON API.
+
+* variables.
+* add_headers.
+* upstream zone.
+* blacklist and whitelist.
+* limit_conn, limit_req and limit_rate.
+* return location and text.
+
+### statistics
+display stub and http status with json format.
 
 
 Directives
@@ -29,6 +40,24 @@ ctrl_zone
 Creates a shared zone ``NAME`` with the ``SIZE`` for storing statistics data.
 
 
+ctrl
+----------
+
+**syntax:**  *ctrl on|off*
+
+**default:**  *ctrl off*
+
+**context:** *http,server,location*
+
+
+ctrl_config
+------------------
+
+**syntax:**  *ctrl_config*
+
+**context:** *location*
+
+
 ctrl_stats
 ----------
 
@@ -37,6 +66,7 @@ ctrl_stats
 **default:**  *ctrl_stats off*
 
 **context:** *http,server,location*
+
 
 ctrl_stats_display
 ------------------
@@ -59,6 +89,7 @@ nginx.conf
             listen  80;
 
             location / {
+                ctrl        on;
                 ctrl_stats  on;
             }
         }
@@ -66,11 +97,57 @@ nginx.conf
         server {
             listen  8000;
 
+            location /config {
+                ctrl_config;
+            }
+
             location /stats {
                 ctrl_stats_display;
             }
         }
     }
+```
+
+update config
+```
+curl -X PUT -d@conf.json http://127.0.0.1:8000/config
+{
+    "upstreams": {
+        "one": [
+            {
+                "address": "127.0.0.1:8081",
+                "weight": 1
+            },
+            {
+                "address": "127.0.0.1:8082",
+                "weight": 1,
+                "down": false
+            }
+        ],
+
+        "two": [
+            {
+                "address": "127.0.0.1:8081",
+                "weight": 3
+            },
+            {
+                "address": "127.0.0.1:8082",
+                "weight": 3
+            }
+        ]
+    },
+
+    "routes": [
+        {
+            "action": {
+                "return": 200,
+                "text": "hello"
+            }
+        }
+    ]
+}
+curl http://127.0.0.1:80
+hello
 ```
 
 display all stats
