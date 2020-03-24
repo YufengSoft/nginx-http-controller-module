@@ -4,12 +4,13 @@ import re
 import sys
 import time
 import fcntl
+import atexit
 import shutil
+import signal
 import argparse
 import tempfile
 import unittest
 import subprocess
-from multiprocessing import Process
 
 class TestNginx(unittest.TestCase):
 
@@ -90,16 +91,19 @@ class TestNginx(unittest.TestCase):
 
         self.write_file('conf/nginx.conf', conf)
 
-        self._p = Process(target=subprocess.call, args=[ [
+        with open(self.log_file, 'w') as log:
+            self._p = subprocess.Popen(
+                [
                     self.nginx_bin,
                     '-p', self.testdir,
-                ] ])
-        self._p.start()
+                ],
+                stderr=log,
+            )
+
+        atexit.register(self.stop)
 
         if not self.waitforfiles(self.pid_file):
             exit("Could not start nginx")
-
-        self._started = True
 
     def tearDown(self):
         self.stop()
@@ -129,38 +133,23 @@ class TestNginx(unittest.TestCase):
             self._print_log()
 
     def stop(self):
-        if self._started:
-            self._stop()
+        self._stop()
+        atexit.unregister(self.stop)
 
     def _stop(self):
-        with open(self.pid_file, 'r') as f:
-            pid = f.read().rstrip()
+        if self._p.poll() is None:
+            with self._p as p:
+                p.send_signal(signal.SIGQUIT)
 
-        subprocess.call(['kill', '-s', 'QUIT', pid])
-
-        for i in range(150):
-            if not os.path.exists(self.pid_file):
-                break
-            time.sleep(0.1)
-
-        self._p.join(timeout=5)
-
-        if self._p.is_alive():
-            self._p.terminate()
-            self._p.join(timeout=5)
-
-        if self._p.is_alive():
-            self.fail("Could not terminate process " + str(self._p.pid))
-
-        if os.path.exists(self.pid_file):
-            self.fail("Could not terminate nginx")
-
-        self._started = False
-
-        if self._p.exitcode:
-            self.fail(
-                "Child process terminated with code " + str(self._p.exitcode)
-            )
+                try:
+                    retcode = p.wait(15)
+                    if retcode:
+                        self.fail(
+                            "Child process terminated with code " + str(retcode)
+                        )
+                except:
+                    p.kill()
+                    self.fail("Could not terminate unit")
 
     def waitforfiles(self, *files):
         for i in range(50):

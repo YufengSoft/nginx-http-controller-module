@@ -8,6 +8,7 @@ class TestCtrl(TestControl):
     def setUp(self):
 
         super().setUp('''
+        daemon  off;
         error_log  logs/error.log debug;
         events {}
         http {
