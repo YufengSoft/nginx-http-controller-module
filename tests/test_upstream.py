@@ -209,6 +209,31 @@ Connection: close
         self.assertEqual(resps[0], 60, 'weight 2 0')
         self.assertEqual(resps[2], 40, 'weight 2 1')
 
+    def test_upstreams_rr_invalid(self):
+        self.assertIn(
+            'error', self.conf({}, 'upstreams/one'), 'named upstreams empty',
+        )
+        self.assertIn(
+            'error',
+            self.conf({'address':'127.0.0.1'}, 'upstreams/one/0'),
+            'invalid address',
+        )
+        self.assertIn(
+            'error',
+            self.conf({}, 'upstreams/one/0/blah'),
+            'invalid server option',
+        )
+        self.assertIn(
+            'error',
+            self.conf({}, 'upstreams/one/0/weight'),
+            'invalid weight option',
+        )
+        self.assertIn(
+            'error',
+            self.conf('-1', 'upstreams/one/0/weight'),
+            'invalid negative weight',
+        )
+
 
 if __name__ == '__main__':
     TestCtrl.main()
