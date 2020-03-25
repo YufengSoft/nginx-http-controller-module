@@ -314,7 +314,8 @@ ngx_http_ctrl_access_handler(ngx_http_request_t *r)
 static ngx_int_t
 ngx_http_ctrl_precontent_handler(ngx_http_request_t *r)
 {
-    ngx_str_t                  text;
+    ngx_int_t                   rc;
+    ngx_str_t                  *text;
     ngx_uint_t                 status;
     ngx_http_action_t         *action;
     ngx_http_ctrl_ctx_t       *ctx;
@@ -339,24 +340,29 @@ ngx_http_ctrl_precontent_handler(ngx_http_request_t *r)
             {
                 ngx_memzero(&cv, sizeof(ngx_http_complex_value_t));
 
+                text = &cv.value;
+
                 if (status == NGX_HTTP_MOVED_PERMANENTLY
                     || status == NGX_HTTP_MOVED_TEMPORARILY
                     || status == NGX_HTTP_SEE_OTHER
                     || status == NGX_HTTP_TEMPORARY_REDIRECT
                     || status == NGX_HTTP_PERMANENT_REDIRECT)
                 {
-                    text.len = action->return_location.length;
-                    text.data = action->return_location.start;
+                    text->len = action->return_location.length;
+                    text->data = action->return_location.start;
 
                 } else {
-                    text.len = action->return_text.length;
-                    text.data = action->return_text.start;
+                    text->len = action->return_text.length;
+                    text->data = action->return_text.start;
                 }
 
-                cv.value = text;
+                rc = ngx_http_send_response(r, action->return_status,
+                                            NULL, &cv);
 
-                return ngx_http_send_response(r, action->return_status,
-                                              NULL, &cv);
+                ngx_http_finalize_request(r, rc);
+
+                return NGX_DONE;
+
             } else {
                 return action->return_status;
             }

@@ -424,6 +424,7 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
     nxt_mp_t               *mp;
     nxt_int_t              ret;
     nxt_str_t              path;
+    nxt_bool_t             post;
     nxt_conf_op_t          *ops;
     nxt_conf_value_t       *value;
     nxt_conf_validation_t  vldt;
@@ -460,7 +461,18 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
         return ngx_http_conf_response(req);
     }
 
-    if (r->method == NGX_HTTP_PUT) {
+    if (r->method == NGX_HTTP_POST) {
+        if (path.length == 1) {
+            goto not_allowed;
+        }
+
+        post = 1;
+
+    } else {
+        post = 0;
+    }
+
+    if (post || r->method == NGX_HTTP_PUT) {
 
         mp = nxt_mp_create(1024, 128, 256, 32);
         if (nxt_slow_path(mp == NULL)) {
@@ -493,7 +505,7 @@ ngx_http_conf_handle(ngx_http_request_t *r, nxt_http_request_t *req)
 
         if (path.length != 1) {
             ret = nxt_conf_op_compile(req->mem_pool, &ops, ngx_http_conf->root,
-                                      &path, value, 0);
+                                      &path, value, post);
 
             if (ret != NXT_CONF_OP_OK) {
                 nxt_mp_destroy(mp);
