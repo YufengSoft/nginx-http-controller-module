@@ -261,22 +261,22 @@ static nxt_conf_vldt_object_t  nxt_conf_vldt_upstream_server_members[] = {
       NULL },
 
     { nxt_string("weight"),
-      NXT_CONF_VLDT_INTEGER,
+      NXT_CONF_VLDT_NUMBER,
       &nxt_conf_vldt_server_weight,
       NULL },
 
     { nxt_string("max_conns"),
-      NXT_CONF_VLDT_INTEGER,
+      NXT_CONF_VLDT_NUMBER,
       &nxt_conf_vldt_server_max_conns,
       NULL },
 
     { nxt_string("max_fails"),
-      NXT_CONF_VLDT_INTEGER,
+      NXT_CONF_VLDT_NUMBER,
       &nxt_conf_vldt_server_max_fails,
       NULL },
 
     { nxt_string("fail_timeout"),
-      NXT_CONF_VLDT_INTEGER,
+      NXT_CONF_VLDT_NUMBER,
       &nxt_conf_vldt_server_fail_timeout,
       NULL },
 
@@ -891,18 +891,17 @@ static nxt_int_t
 nxt_conf_vldt_server_weight(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value, void *data)
 {
-    int64_t  int_value;
+    double  num_value;
 
-    int_value = nxt_conf_get_number(value);
+    num_value = nxt_conf_get_number(value);
 
-    if (int_value <= 0) {
-        return nxt_conf_vldt_error(vldt, "The \"weight\" number must be "
-                                   "greater than 0.");
+    if (num_value < 0) {
+        return nxt_conf_vldt_error(vldt, "The \"weight\" number must be positive.");
     }
 
-    if (int_value > NXT_INT32_T_MAX) {
+    if (num_value > 1000000) {
         return nxt_conf_vldt_error(vldt, "The \"weight\" number must "
-                                   "not exceed %d.", NXT_INT32_T_MAX);
+                                   "not exceed 1,000,000.");
     }
 
     return NXT_OK;
@@ -913,18 +912,17 @@ static nxt_int_t
 nxt_conf_vldt_server_max_conns(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value, void *data)
 {
-    int64_t  int_value;
+    double  num_value;
 
-    int_value = nxt_conf_get_number(value);
+    num_value = nxt_conf_get_number(value);
 
-    if (int_value <= 0) {
-        return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must be "
-                                   "greater than 0.");
+    if (num_value < 0) {
+        return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must be positive.");
     }
 
-    if (int_value > NXT_INT32_T_MAX) {
+    if (num_value > 1000000) {
         return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must "
-                                   "not exceed %d.", NXT_INT32_T_MAX);
+                                   "not exceed 1000,000.");
     }
 
     return NXT_OK;
@@ -935,18 +933,17 @@ static nxt_int_t
 nxt_conf_vldt_server_max_fails(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value, void *data)
 {
-    int64_t  int_value;
+    double  num_value;
 
-    int_value = nxt_conf_get_number(value);
+    num_value = nxt_conf_get_number(value);
 
-    if (int_value <= 0) {
-        return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must be "
-                                   "greater than 0.");
+    if (num_value < 0) {
+        return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must be positive.");
     }
 
-    if (int_value > NXT_INT32_T_MAX) {
+    if (num_value > 1000000) {
         return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must "
-                                   "not exceed %d.", NXT_INT32_T_MAX);
+                                   "not exceed 1000,000.");
     }
 
     return NXT_OK;
@@ -957,18 +954,17 @@ static nxt_int_t
 nxt_conf_vldt_server_fail_timeout(nxt_conf_validation_t *vldt,
     nxt_conf_value_t *value, void *data)
 {
-    int64_t  int_value;
+    double  num_value;
 
-    int_value = nxt_conf_get_number(value);
+    num_value = nxt_conf_get_number(value);
 
-    if (int_value <= 0) {
-        return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must be "
-                                   "greater than 0.");
+    if (num_value < 0) {
+        return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must be positive.");
     }
 
-    if (int_value > NXT_INT32_T_MAX) {
+    if (num_value > 1000000) {
         return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must "
-                                   "not exceed %d.", NXT_INT32_T_MAX);
+                                   "not exceed 1000,000.");
     }
 
     return NXT_OK;
