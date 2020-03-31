@@ -290,6 +290,8 @@ ngx_http_upstream_peers_copy(nxt_upstream_t *upstream,
         peerp = &peer->next;
     }
 
+    peers->next = NULL;
+
     for (peer = old_peer; peer; peer = peer->next) {
         ngx_http_upstream_peer_free(shpool, peer);
     }
