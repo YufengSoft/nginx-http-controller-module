@@ -226,6 +226,7 @@ ngx_http_ctrl_config_handler(ngx_http_request_t *r)
         return ngx_http_ctrl_response(r, req.status, &req.resp);
 
     case NGX_HTTP_PUT:
+    case NGX_HTTP_POST:
 
         ngx_shmtx_lock(&shctx->shpool->mutex);
 

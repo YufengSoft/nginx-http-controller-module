@@ -105,6 +105,8 @@ class TestNginx(unittest.TestCase):
         if not self.waitforfiles(self.pid_file):
             exit("Could not start nginx")
 
+        self.skip_alerts = []
+
     def tearDown(self):
         self.stop()
 
@@ -125,6 +127,11 @@ class TestNginx(unittest.TestCase):
         success = not list2reason(result.errors) and not list2reason(
             result.failures
         )
+
+        # check error.log for alerts
+
+        with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            self._check_alerts(f.read())
 
         if not TestNginx.save_log and success:
             shutil.rmtree(self.testdir)
@@ -185,6 +192,27 @@ class TestNginx(unittest.TestCase):
         file = open(path, 'w')
         file.write(data);
         file.close()
+
+    def _check_alerts(self, log):
+        found = False
+
+        alerts = re.findall('.+\[alert\].+', log)
+
+        if alerts:
+            print('All alerts errors found in log:')
+            [print(alert) for alert in alerts]
+            found = True
+
+        if self.skip_alerts:
+            for skip in self.skip_alerts:
+                alerts = [al for al in alerts if re.search(skip, al) is None]
+
+        if alerts:
+            self._print_log(log)
+            self.assertFalse(alerts, 'alert(s)')
+
+        if found:
+            print('skipped.')
     
     @staticmethod
     def _parse_args():
@@ -224,7 +252,7 @@ class TestNginx(unittest.TestCase):
         if TestNginx.detailed:
             fcntl.fcntl(sys.stdout.fileno(), fcntl.F_SETFL, 0)
 
-    def _print_log(self):
+    def _print_log(self, data=None):
         print('Path to error.log:\n' + self.log_file)
 
         if TestNginx.print_log:
