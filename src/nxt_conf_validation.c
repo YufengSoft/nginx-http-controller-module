@@ -11,7 +11,7 @@ typedef enum {
     NXT_CONF_VLDT_NULL    = 1 << NXT_CONF_NULL,
     NXT_CONF_VLDT_BOOLEAN = 1 << NXT_CONF_BOOLEAN,
     NXT_CONF_VLDT_INTEGER = 1 << NXT_CONF_INTEGER,
-    NXT_CONF_VLDT_NUMBER  = 1 << NXT_CONF_NUMBER,
+    NXT_CONF_VLDT_NUMBER  = (1 << NXT_CONF_NUMBER) | NXT_CONF_VLDT_INTEGER,
     NXT_CONF_VLDT_STRING  = 1 << NXT_CONF_STRING,
     NXT_CONF_VLDT_ARRAY   = 1 << NXT_CONF_ARRAY,
     NXT_CONF_VLDT_OBJECT  = 1 << NXT_CONF_OBJECT,
@@ -322,8 +322,8 @@ nxt_conf_vldt_type(nxt_conf_validation_t *vldt, nxt_str_t *name,
     static nxt_str_t  type_name[] = {
         nxt_string("a null"),
         nxt_string("a boolean"),
-        nxt_string("an integer"),
-        nxt_string("a number"),
+        nxt_string("an integer number"),
+        nxt_string("a fractional number"),
         nxt_string("a string"),
         nxt_string("an array"),
         nxt_string("an object"),
@@ -549,7 +549,7 @@ nxt_conf_vldt_action(nxt_conf_validation_t *vldt, nxt_conf_value_t *value,
         return NXT_OK;
     }
 
-    status = nxt_conf_get_integer(return_value);
+    status = nxt_conf_get_number(return_value);
 
     if (status < 100 || status > 599) {
         return nxt_conf_vldt_error(vldt, "The \"return\" number must be "
@@ -893,7 +893,7 @@ nxt_conf_vldt_server_weight(nxt_conf_validation_t *vldt,
 {
     int64_t  int_value;
 
-    int_value = nxt_conf_get_integer(value);
+    int_value = nxt_conf_get_number(value);
 
     if (int_value <= 0) {
         return nxt_conf_vldt_error(vldt, "The \"weight\" number must be "
@@ -915,7 +915,7 @@ nxt_conf_vldt_server_max_conns(nxt_conf_validation_t *vldt,
 {
     int64_t  int_value;
 
-    int_value = nxt_conf_get_integer(value);
+    int_value = nxt_conf_get_number(value);
 
     if (int_value <= 0) {
         return nxt_conf_vldt_error(vldt, "The \"max_conns\" number must be "
@@ -937,7 +937,7 @@ nxt_conf_vldt_server_max_fails(nxt_conf_validation_t *vldt,
 {
     int64_t  int_value;
 
-    int_value = nxt_conf_get_integer(value);
+    int_value = nxt_conf_get_number(value);
 
     if (int_value <= 0) {
         return nxt_conf_vldt_error(vldt, "The \"max_fails\" number must be "
@@ -959,7 +959,7 @@ nxt_conf_vldt_server_fail_timeout(nxt_conf_validation_t *vldt,
 {
     int64_t  int_value;
 
-    int_value = nxt_conf_get_integer(value);
+    int_value = nxt_conf_get_number(value);
 
     if (int_value <= 0) {
         return nxt_conf_vldt_error(vldt, "The \"fail_timeout\" number must be "

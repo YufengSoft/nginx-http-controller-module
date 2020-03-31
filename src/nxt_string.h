@@ -18,6 +18,11 @@ nxt_upcase(c)                                                                 \
 
 
 #define                                                                       \
+nxt_strtod(s, endptr)                                                         \
+    strtod((char *) s, (char **) endptr)
+
+
+#define                                                                       \
 nxt_strlen(s)                                                                 \
     strlen((char *) s)
 
@@ -59,6 +64,7 @@ nxt_memchr(s, c, length)                                                      \
     memchr((char *) s, c, length)
 
 
+NXT_EXPORT u_char *nxt_cpystr(u_char *dst, const u_char *src);
 NXT_EXPORT nxt_int_t nxt_strncasecmp(const u_char *s1, const u_char *s2,
     size_t length);
 NXT_EXPORT nxt_int_t nxt_memcasecmp(const void *p1, const void *p2,

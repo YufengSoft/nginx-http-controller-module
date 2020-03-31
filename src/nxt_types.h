@@ -77,6 +77,8 @@ typedef int                  nxt_err_t;
 #define NXT_DECLINED               (-3)
 #define NXT_DONE                   (-4)
 
+#define NXT_ERANGE                 ERANGE
+
 
 #define NXT_LOG_ERR  NGX_LOG_ERR
 
